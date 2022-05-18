@@ -1,7 +1,7 @@
 #!/bin/bash
 
 char_to_hex() {
-    printf  "0x%x" "'${1}"
+    printf  "%x" "'${1}"
 }
 
 str_to_hex() {
@@ -9,7 +9,7 @@ str_to_hex() {
 }
 
 dec_to_hex() {
-    printf  "0x%x" $1
+    printf  "%x" $1
 }
 
 hex_to_dec() {
@@ -55,15 +55,25 @@ rlp_encode_str() {
 }
 
 rlp_encode_list() {
-    printf list
+    local input=$1
+    local count=0
+    local result
+    IFS=',' read -r -a items <<< "$input"
+    #unset items[-1] # stupid hack to remove extra array element
+    for item in "${items[@]}"; do
+        result=$result$(rlp_encode $item)
+        # count the item plus the length of encoded item after each pass
+        ((count=$count + ${#item} + 1))
+    done
+    printf $(rlp_encode_len $count 0xc0)"$result"    
 }
 
 rlp_encode() {
     local input=$1
     local length=${#input}
-    if [ ${input:0:1} == "[" ] && [ ${input:$(($length-1)):$length} == "]" ]
+    if [ "${input:0:1}" == "[" ] && [ "${input:$(($length-1)):$length}" == "]" ]
     then
-        rlp_encode_list $input
+        rlp_encode_list "${input:1:$(($length-2))}" 
     else
         rlp_encode_str "$input" $length
     fi
@@ -78,8 +88,10 @@ rlp_encode() {
 #dec_to_bin 25633445434
 
 #rlp_encode a
-rlp_encode dog
+#rlp_encode dog
 #rlp_encode "Lorem ipsum dolor sit amet, consectetur adipisicing elit"
-#rlp_encode ['hello','world']
+#rlp_encode "hello"
+#rlp_encode []
+rlp_encode ["hello","world"]
 
 
