@@ -4,6 +4,10 @@ char_to_hex() {
     printf  "0x%x" "'${1}"
 }
 
+str_to_hex() {
+    for ((i=0;i<${#1};i++));do printf $(char_to_hex ${1:$i:1});done
+}
+
 dec_to_hex() {
     printf  "0x%x" $1
 }
@@ -41,21 +45,41 @@ rlp_encode_len() {
 
 rlp_encode_str() {
     local input=$1
-    local input_hex=$(char_to_hex $input)
-    local length=${#input}
-    if [ $length -eq 1 ] && [ $(hex_to_dec $input_hex) -lt $(hex_to_dec 0x80) ]
+    local length=$2
+    if [ $length -eq 1 ] && [ $(hex_to_dec $(char_to_hex "$input")) -lt $(hex_to_dec 0x80) ]
     then
-        printf $input
+        printf $(char_to_hex "$input")
     else
-        printf $(rlp_encode_len $length 0x80)"$input"
+        printf $(rlp_encode_len $length 0x80)$(str_to_hex "$input")
     fi
-    
 }
+
+rlp_encode_list() {
+    printf list
+}
+
+rlp_encode() {
+    local input=$1
+    local length=${#input}
+    if [ ${input:0:1} == "[" ] && [ ${input:$(($length-1)):$length} == "]" ]
+    then
+        rlp_encode_list $input
+    else
+        rlp_encode_str "$input" $length
+    fi
+}
+
+
 
 #hex_to_dec 0x7F
 #char_to_hex a
-#rlp_encode_str a
-#rlp_encode_str dog
-rlp_encode_str "Lorem ipsum dolor sit amet, consectetur adipisicing elit"
+#str_to_hex dog
 #rlp_encode_len 3 0x80
 #dec_to_bin 25633445434
+
+#rlp_encode a
+rlp_encode dog
+#rlp_encode "Lorem ipsum dolor sit amet, consectetur adipisicing elit"
+#rlp_encode ['hello','world']
+
+
