@@ -12,10 +12,11 @@ hex_to_dec() {
     printf  "%d" $1
 }
 
+# doesn't pad with 0s
 dec_to_bin() {
     local n bit
     for (( n=$1 ; n>0 ; n >>= 1 )); do  bit="$(( n&1 ))$bit"; done
-    printf "%s" "$bit" # TODO: should this pad with 0s?
+    printf "%s" "$bit" 
 }
 
 rlp_encode_length() {
@@ -26,8 +27,14 @@ rlp_encode_length() {
         printf $(dec_to_hex $(($length + $offset)))
     elif [ $length -lt $((2**62)) ] # TODO: should be 2**64, but BASH doesn't like it
     then
-        local binary_length=$(dec_to_bin $length)
-        printf $(dec_to_hex $(( ${#binary_length} + $offset + 55 )))$binary_length
+        local length_binary=$(dec_to_bin $length)
+        # Because dec_to_bin() doesn't pad with zeros we ensure that truncating arithmetic rounds 
+        # up by adding (denom-1) to the numerator.
+        local length_bytes=$(( (${#length_binary}+7)/8 ))
+        # 128 (0x80) + 55 (0x37) = 183 (0xb7) + numBytes(string length)
+        printf $(dec_to_hex $(( $offset + 55 + $length_bytes )))$(dec_to_hex $length)
+    else
+        exit 1
     fi
     
 }
@@ -40,7 +47,7 @@ rlp_encode_str() {
     then
         printf $input
     else
-        printf $(rlp_encode_length $length 0x80)$input
+        printf $(rlp_encode_length $length 0x80)"$input"
     fi
     
 }
@@ -49,6 +56,6 @@ rlp_encode_str() {
 #char_to_hex a
 #rlp_encode_str a
 #rlp_encode_str dog
-rlp_encode_str Comedown.Getoffyourfuckingcross.Weneedthefuckingspacetonailthenextfoolmartyr.
+rlp_encode_str "Lorem ipsum dolor sit amet, consectetur adipisicing elit"
 #rlp_encode_length 3 0x80
 #dec_to_bin 25633445434
