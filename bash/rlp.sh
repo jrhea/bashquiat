@@ -19,7 +19,7 @@ dec_to_bin() {
     printf "%s" "$bit" 
 }
 
-rlp_encode_length() {
+rlp_encode_len() {
     local length=$1
     local offset=$(hex_to_dec $2)
     if [ $length -lt 56 ]
@@ -47,7 +47,7 @@ rlp_encode_str() {
     then
         printf $input
     else
-        printf $(rlp_encode_length $length 0x80)"$input"
+        printf $(rlp_encode_len $length 0x80)"$input"
     fi
     
 }
@@ -57,5 +57,5 @@ rlp_encode_str() {
 #rlp_encode_str a
 #rlp_encode_str dog
 rlp_encode_str "Lorem ipsum dolor sit amet, consectetur adipisicing elit"
-#rlp_encode_length 3 0x80
+#rlp_encode_len 3 0x80
 #dec_to_bin 25633445434
