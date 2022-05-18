@@ -14,7 +14,7 @@ rlp_encode_str() {
     local length=${#input}
     if [ $length -eq 1 ] && [ $(hex_to_dec $input_hex) -lt $(hex_to_dec 0x80) ]
     then
-        printf $length
+        printf $input
     fi
     
 }
