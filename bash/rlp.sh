@@ -5,7 +5,7 @@ char_to_hex() {
 }
 
 str_to_hex() {
-    for ((i=0;i<${#1};i++));do printf $(char_to_hex "${1:$i:1}");done
+    for ((i=0;i<${#1};i++));do printf "$(char_to_hex "${1:$i:1}")";done
 }
 
 dec_to_hex() {
@@ -25,19 +25,20 @@ dec_to_bin() {
 
 rlp_encode_len() {
     local length=$1
-    local offset=$(hex_to_dec "$2")
+    local offset
+    offset=$(hex_to_dec "$2")
     if [ "$length" -lt 56 ]
     then
-        printf $(dec_to_hex $((length + offset)))
+        printf "$(dec_to_hex $((length + offset)))"
     elif [ "$length" -lt $((2**62)) ] # TODO: should be 2**64, but BASH doesn't like it
     then
-        # TODO: There is a more efficient way to do this
-        local length_binary=$(dec_to_bin "$length")
+        local length_binary length_bytes
+        length_binary=$(dec_to_bin "$length")
         # Because dec_to_bin() doesn't pad with zeros we ensure that truncating arithmetic rounds 
         # up by adding (denom-1) to the numerator.
-        local length_bytes=$(( (${#length_binary}+7)/8 ))
+        length_bytes=$(( (${#length_binary}+7)/8 ))
         # 128 (0x80) + 55 (0x37) = 183 (0xb7) + numBytes(string length)
-        printf $(dec_to_hex $(( offset + 55 + length_bytes )))$(dec_to_hex "$length")
+        printf "$(dec_to_hex $(( offset + 55 + length_bytes )))$(dec_to_hex "$length")"
     else
         exit 1
     fi
@@ -47,25 +48,26 @@ rlp_encode_len() {
 rlp_encode_str() {
     local input=$1
     local length=$2
-    if [ "$length" -eq 1 ] && [ $(hex_to_dec $(char_to_hex "$input")) -lt $(hex_to_dec 0x80) ]
+    if [ "$length" -eq 1 ] && [ "$(hex_to_dec "$(char_to_hex "$input")")" -lt "$(hex_to_dec 0x80)" ]
     then
-        printf $(char_to_hex "$input")
+        printf "$(char_to_hex "$input")"
     else
 
-        printf $(rlp_encode_len "$length" 0x80)$(str_to_hex "$input")
+        printf "$(rlp_encode_len "$length" 0x80)$(str_to_hex "$input")"
     fi
 }
 
 rlp_encode_int() {
     local input=$1
     local length=$2
-    if [ "$length" -eq 1 ] && [ $(hex_to_dec "$input") -lt $(hex_to_dec 0x80) ]
+    if [ "$length" -eq 1 ] && [ "$(hex_to_dec "$input")" -lt "$(hex_to_dec 0x80)" ]
     then
-        printf 0$(dec_to_hex "$input")
+        printf "0$(dec_to_hex "$input")"
     else
-        local input_hex=$(dec_to_hex "$input")
-        local length_bytes=$(( (${#input_hex}+1)/2 ))
-        printf $(rlp_encode_len $length_bytes 0x80)0$(dec_to_hex "$input")
+        local input_hex length_bytes
+        input_hex=$(dec_to_hex "$input")
+        length_bytes=$(( (${#input_hex}+1)/2 ))
+        printf "$(rlp_encode_len $length_bytes 0x80)0$(dec_to_hex "$input")"
     fi
 }
 
@@ -92,12 +94,12 @@ rlp_encode_list() {
 
     IFS='|' read -r -a items <<< "$input"
     for item in "${items[@]}"; do
-        array+=($(rlp_encode "$item"))
+        array+=("$(rlp_encode "$item")")
     done
     # flatten array into result
     printf -v result '%s' "${array[@]}" # TODO: not a fan of using the extra variable here
     # $(( (${#result}+1)/2 )) count bytes
-    printf $(rlp_encode_len $(( (${#result}+1)/2 )) 0xc0)"${result[*]}"    
+    printf "$(rlp_encode_len $(( (${#result}+1)/2 )) 0xc0)${result[*]}" 
 }
 
 rlp_encode() {
