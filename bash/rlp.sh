@@ -9,11 +9,11 @@ str_to_hex() {
 }
 
 dec_to_hex() {
-    printf  "%x" $1
+    printf  "%x" "$1"
 }
 
 hex_to_dec() {
-    printf  "%d" $1
+    printf  "%d" "$1"
 }
 
 # doesn't pad with 0s
@@ -49,22 +49,23 @@ rlp_encode_str() {
     local length=$2
     if [ $length -eq 1 ] && [ $(hex_to_dec $(char_to_hex "$input")) -lt $(hex_to_dec 0x80) ]
     then
-        # True if $input is algebraically equal; otherwise, false.
-        if [ "$input" -eq "$input" ] 2> /dev/null
-        then
-            printf 0$(dec_to_hex "$input")
-        else
-            printf $(char_to_hex "$input")
-        fi
-        
+        printf $(char_to_hex "$input")
     else
-        # True if $input is algebraically equal; otherwise, false.
-        if [ "$input" -eq "$input" ] 2> /dev/null
-        then
-            printf $(rlp_encode_len $length 0x80)0$(dec_to_hex "$input")
-        else
-            printf $(rlp_encode_len $length 0x80)$(str_to_hex "$input")
-        fi
+
+        printf $(rlp_encode_len $length 0x80)$(str_to_hex "$input")
+    fi
+}
+
+rlp_encode_int() {
+    local input=$1
+    local length=$2
+    if [ $length -eq 1 ] && [ $(hex_to_dec "$input") -lt $(hex_to_dec 0x80) ]
+    then
+        printf 0$(dec_to_hex "$input")
+    else
+        local input_hex=$(dec_to_hex $input)
+        local length_bytes=$(( (${#input_hex}+1)/2 ))
+        printf $(rlp_encode_len $length_bytes 0x80)0$(dec_to_hex "$input")
     fi
 }
 
@@ -72,7 +73,6 @@ rlp_encode_list() {
     local input=$1
     local count=0
     local array=()
-
 
     # Search for a delimiter not surrounded in brackets
     for (( i=0; i<${#input}; i++ ));
@@ -107,6 +107,9 @@ rlp_encode() {
     then
         # remove outer brackets
         rlp_encode_list "${input:1:$(($length-2))}"
+    elif [ "$input" -eq "$input" ] 2> /dev/null # True if $input is algebraically equal
+    then
+        rlp_encode_int "$input" $length
     else
         rlp_encode_str "$input" $length
     fi
@@ -132,6 +135,8 @@ rlp_encode 1
 printf '\n%s\n' "01"
 rlp_encode 1000
 printf '\n%s\n' "8203e8"
+rlp_encode 100000
+printf '\n%s\n' "830186a0"
 rlp_encode []
 printf '\n%s\n' "c0"
 rlp_encode ["dog","god","cat"]
