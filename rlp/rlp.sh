@@ -116,33 +116,3 @@ rlp_encode() {
         rlp_encode_str "$input" "$length"
     fi
 }
-
-
-rlp_encode " "
-printf '\n%s\n' "20"
-rlp_encode a
-printf '\n%s\n' "61"
-rlp_encode dog
-printf '\n%s\n' "83646f67"
-rlp_encode "Lorem ipsum dolor sit amet, consectetur adipisicing elit"
-printf '\n%s\n' "b8384c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e7365637465747572206164697069736963696e6720656c6974"
-rlp_encode 1
-printf '\n%s\n' "01"
-rlp_encode 1000
-printf '\n%s\n' "8203e8"
-rlp_encode 100000
-printf '\n%s\n' "830186a0"
-rlp_encode []
-printf '\n%s\n' "c0"
-rlp_encode ["dog","god","cat"]
-printf '\n%s\n' "cc83646f6783676f6483636174"
-rlp_encode ["zw",[4],1]
-printf '\n%s\n' "c6827a77c10401"
-rlp_encode [[[],[]],[]]
-printf '\n%s\n' "c4c2c0c0c0"
-rlp_encode [[],[[]],[[],[[]]]]
-printf '\n%s\n' "c7c0c1c0c3c0c1c0"
-
-
-
-

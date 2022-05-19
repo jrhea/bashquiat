@@ -7,7 +7,7 @@ str2hex() {
     local fmt="%x"
     local chr
     local -i i
-    for i in `seq 0 $((${#str}-1))`; do
+    for i in $(seq 0 $((${#str}-1))); do
         chr=${str:i:1}
         # If the leading character is a single-quote or double-quote, the value shall be the numeric value in the underlying codeset of the character following the single-quote or double-quote
         printf  "${fmt}" "'${chr}"
