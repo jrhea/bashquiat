@@ -48,7 +48,15 @@ rlp_encode_str() {
     local length=$2
     if [ $length -eq 1 ] && [ $(hex_to_dec $(char_to_hex "$input")) -lt $(hex_to_dec 0x80) ]
     then
-        printf $(char_to_hex "$input")
+        # True if $input is algebraically equal; otherwise, false.
+        # TODO: make this cleaner
+        if [ "$input" -eq "$input" ] 2> /dev/null
+        then
+            printf 0$(dec_to_hex "$input")
+        else
+            printf $(char_to_hex "$input")
+        fi
+        
     else
         printf $(rlp_encode_len $length 0x80)$(str_to_hex "$input")
     fi
@@ -57,15 +65,22 @@ rlp_encode_str() {
 rlp_encode_list() {
     local input=$1
     local count=0
-    local result
+    local array=()
+    # TODO: this WILL NOT work for list of lists
     IFS=',' read -r -a items <<< "$input"
+    printf $input
     #unset items[-1] # stupid hack to remove extra array element
     for item in "${items[@]}"; do
-        result=$result$(rlp_encode $item)
+        printf "aa$item\n"
+        array+=($(rlp_encode $item))
+        #printf "${array[$count]}\n"
         # count the item plus the length of encoded item after each pass
-        ((count=$count + ${#item} + 1))
+        #((count=$count + 1))
     done
-    printf $(rlp_encode_len $count 0xc0)"$result"    
+    # flatten array into result
+    printf -v result '%s' "${array[@]}"
+    # $(( (${#result}+1)/2 )) count bytes
+    printf $(rlp_encode_len $(( (${#result}+1)/2 )) 0xc0)"${result[*]}"    
 }
 
 rlp_encode() {
@@ -73,7 +88,7 @@ rlp_encode() {
     local length=${#input}
     if [ "${input:0:1}" == "[" ] && [ "${input:$(($length-1)):$length}" == "]" ]
     then
-        rlp_encode_list "${input:1:$(($length-2))}" 
+        rlp_encode_list "${input:1:$(($length-2))}"
     else
         rlp_encode_str "$input" $length
     fi
@@ -92,6 +107,10 @@ rlp_encode() {
 #rlp_encode "Lorem ipsum dolor sit amet, consectetur adipisicing elit"
 #rlp_encode "hello"
 #rlp_encode []
-rlp_encode ["hello","world"]
+#rlp_encode ["hello","world"]
+#rlp_encode ["zw",[4],1]
+rlp_encode [[[],[]],[]]
+# eecho "[[],[]],[]" | sed -e 's/^.*\[.*\],/|/g'
+
 
 
