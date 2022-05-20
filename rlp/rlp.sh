@@ -36,7 +36,7 @@ rlp_encode_len() {
     if [ "$length" -lt 56 ]
     then
         printf "$(dec_to_hex $((length + offset)))"
-    elif [ "$length" -lt $((2**62)) ] # TODO: should be 2**64, but BASH doesn't like it
+    elif [ "$length" -lt $((2**63 - 1)) ] # TODO: this should be 2^64, but bash overflows at 2^63
     then
         local length_binary length_bytes
         length_binary=$(dec_to_bin "$length")
