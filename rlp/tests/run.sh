@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source $PWD/rlp/rlp.sh
+source $PWD/rlp/encode.sh
 
 i=0
 out=$(grep -o '\"out\": .*' $PWD/rlp/tests/tests.json | cut -d: -f2 | sed 's/^ *//g' | tr -d "\"" | tr "\n" "|")
