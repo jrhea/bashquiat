@@ -4,6 +4,10 @@ char_to_hex() {
     printf  "%02x" "'${1}"
 }
 
+char_to_dec() {
+    printf  "%d" "'${1}"
+}
+
 str_to_hex() {
     for ((i=0;i<${#1};i++));do printf "$(char_to_hex "${1:$i:1}")";done
 }
@@ -54,7 +58,7 @@ rlp_encode_len() {
 rlp_encode_str() {
     local input=$1
     local length=$2
-    if [ "$length" -eq 1 ] && [ "$(hex_to_dec "$(char_to_hex "$input")")" -lt "$(hex_to_dec 0x80)" ]
+    if [ "$length" -eq 1 ] && [ "$(char_to_dec "$input")" -lt 128 ]
     then
         printf "$(char_to_hex "$input")"
     else
@@ -68,7 +72,7 @@ rlp_encode_int() {
     local input_hex length
     input_hex=$(dec_to_hex "$input")
     length=$(( (${#input_hex}+1)/2 ))
-    if [ "$length" -eq 1 ] && [ "$input" -lt "$(hex_to_dec 0x80)" ]
+    if [ "$length" -eq 1 ] && [ "$input" -lt 128 ]
     then
         printf "${input_hex//00/80}" #If input is non-value 0x00, RLP encoding is 0x80
     else
