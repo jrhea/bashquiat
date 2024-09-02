@@ -5,28 +5,11 @@ hex_to_char() {
 }
 
 hex_to_str() {
-    local hex_input=$1
-    for ((i=0; i<${#hex_input}; i+=2)); do
-        hex_to_char "${hex_input:$i:2}"
-    done
-    echo
+    echo -n "$1" | xxd -r -p
 }
 
 hex_to_int() {
     printf "%d" "$((16#$1))"
-}
-
-not_printable() {
-    local result
-    result=0
-    for ((i=0;i<${#1};i+=2));do 
-        if [ "$(hex_to_int ${1:i:2})" -lt 32 ] || [ "$(hex_to_int ${1:i:2})" -gt 126 ]
-        then
-            result=1;
-            break;
-        fi
-    done
-    printf "$result"
 }
 
 decode_length() {
@@ -63,13 +46,20 @@ decode_length() {
 
 rlp_decode_string() {
     local input=$1
-    local offset=$2    
-    local not_printable_result=$(not_printable "$input")
-    
-    if [ -z "$offset" ] || [ "$offset" -eq 0 ] || [ "$not_printable_result" -eq "1" ]; then
+    local offset=$2
+    local dataLen=$3
+
+    if [ "$dataLen" -eq 0 ]; then
+        echo -n ""
+    elif [ "$offset" -eq 0 ] || [ "$dataLen" -ge 2 ]; then
         hex_to_int "$input"
     else
-        hex_to_str "$input"
+        local value=$(hex_to_int "$input")
+        if [ "$value" -lt 128 ]; then
+            echo -n "$value"
+        else
+            hex_to_str "$input"
+        fi
     fi
 }
 
@@ -131,10 +121,10 @@ rlp_decode() {
     local offset=${arr[0]}
     local dataLen=${arr[1]}
     local type=${arr[2]}
+    
     if [ "$type" == "str" ]; then
-        output=$(printf "${input:$offset:(($dataLen))}")
-        echo -n $(rlp_decode_string $output $offset)
-        # Remove the recursive call here
+        output=$(printf "${input:$offset:(($dataLen*2))}")
+        echo -n $(rlp_decode_string "$output" "$offset" "$dataLen")
     elif [ "$type" == "list" ]; then
         output=$(printf "${input:2:(($dataLen*2))}")
         echo -n "$(rlp_decode $output)"
@@ -144,8 +134,13 @@ rlp_decode() {
 # decode_length 83646f67
 # hex_to_char 64
 # hex_to_int 83
-# hex_to_int 80 #0
+# hex_to_int 80 
 
+#rlp_decode 8F102030405060708090A0B0C0D0E0F2
+
+# rlp_decode 8180 # works
+# rlp_decode 80 # works
+# rlp_decode 4f #79 works
 # rlp_decode 83646f67 #dog works
 # rlp_decode 8203e8 #1000 works
 # rlp_decode 830186a0 #100000 works

@@ -58,12 +58,14 @@ rlp_encode_len() {
 rlp_encode_str() {
     local input=$1
     local length=$2
-    if [ "$length" -eq 1 ] && [ "$(char_to_dec "$input")" -lt 128 ]
+    if [ "$length" -eq 0 ]
+    then
+        printf "80"
+    elif [ "$length" -eq 1 ] && [ "$(char_to_dec "$input")" -lt 128 ]
     then
         printf "$(char_to_hex "$input")"
     else
-
-        printf "$(rlp_encode_len "$length" 0x80)$(str_to_hex "$input")"
+        printf "%s%s" "$(rlp_encode_len "$length" 0x80)" "$(str_to_hex "$input")"
     fi
 }
 
