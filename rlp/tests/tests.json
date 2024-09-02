@@ -71,17 +71,16 @@
 		"in": ["asdf","qwer","zxcv","asdf","qwer","zxcv","asdf","qwer","zxcv","asdf","qwer"],
 		"out": "F784617364668471776572847a78637684617364668471776572847a78637684617364668471776572847a78637684617364668471776572"
 	},
-	"longList1" : {
-		"in" : [["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"]
+	"longList1": {
+		"in": [["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"]
 		],
 		"out": "F840CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376"
 	},
-	"longList2" : {
-		"in" : [["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"]
+	"longList2": {
+		"in": [["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"],["asdf","qwer","zxcv"]
 		],
 		"out": "F90200CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376CF84617364668471776572847a786376"
 	},
-
 	"listsoflists": {
 		"in": [[[],[]],[]],
 		"out": "c4c2c0c0c0"
@@ -90,9 +89,9 @@
 		"in": [[],[[]],[[],[[]]]],
 		"out": "c7c0c1c0c3c0c1c0"
 	},
-	"dictTest1" : {
-		"in" : [["key1","val1"],["key2","val2"],["key3","val3"],["key4","val4"]],
-		"out" : "ECCA846b6579318476616c31CA846b6579328476616c32CA846b6579338476616c33CA846b6579348476616c34"
+	"dictTest1": {
+		"in": [["key1","val1"],["key2","val2"],["key3","val3"],["key4","val4"]],
+		"out": "ECCA846b6579318476616c31CA846b6579328476616c32CA846b6579338476616c33CA846b6579348476616c34"
 	},
 	"bigint": {
 		"in": 115792089237316195423570985008687907853269984665640564039457584007913129639936,
