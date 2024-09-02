@@ -1,7 +1,7 @@
 #!/bin/bash
 
-source $PWD/encode.sh
-source $PWD/decode.sh
+source encode.sh
+source decode.sh
 
 # Colors for output
 GREEN='\033[0;32m'

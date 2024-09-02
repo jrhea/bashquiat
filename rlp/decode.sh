@@ -12,6 +12,38 @@ hex_to_int() {
     printf "%d" "$((16#$1))"
 }
 
+hex_to_big_int() {
+    local hex=$1
+    local dec
+
+    # Remove leading zeros
+    hex=$(echo "$hex" | sed 's/^0*//')
+
+    # If hex is empty after removing zeros, it was all zeros
+    if [ -z "$hex" ]; then
+        echo "0"
+        return
+    fi
+
+    # Convert hex to decimal using bc
+    # BC_LINE_LENGTH=0 is required to prevent bc from wrapping lines
+    dec=$(echo "ibase=16; ${hex^^}" | BC_LINE_LENGTH=0 bc)
+    echo "$dec"
+}
+
+not_printable() {
+    local result
+    result=0
+    for ((i=0;i<${#1};i+=2));do 
+        if [ "$(hex_to_int ${1:i:2})" -lt 32 ] || [ "$(hex_to_int ${1:i:2})" -gt 126 ]
+        then
+            result=1;
+            break;
+        fi
+    done
+    printf "$result"
+}
+
 decode_length() {
     local input=$1
     local length=$(( (${#input}+1)/2 ))
@@ -48,17 +80,26 @@ rlp_decode_string() {
     local input=$1
     local offset=$2
     local dataLen=$3
+    # echo "input: $input"
+    # echo "offset: $offset"
+    # echo "dataLen: $dataLen"
 
     if [ "$dataLen" -eq 0 ]; then
         echo -n ""
-    elif [ "$offset" -eq 0 ] || [ "$dataLen" -ge 2 ]; then
-        hex_to_int "$input"
     else
         local value=$(hex_to_int "$input")
-        if [ "$value" -lt 128 ]; then
+        local isNotPrintable=$(not_printable "$input")
+        # echo "isNotPrintable: $isNotPrintable"
+        # echo "value: $value"
+        # echo "toStr: $(hex_to_str $input)"
+        if [ "$value" -gt 0 ] && [ "$value" -lt 128 ]; then
             echo -n "$value"
-        else
+        elif [ "$isNotPrintable" -eq "0" ]; then 
             hex_to_str "$input"
+        elif [ "$value" -lt 0 ] || [ "$value" -lt $((2**63 - 1)) ]; then
+            hex_to_big_int "$input"
+        else
+            echo "$value"
         fi
     fi
 }
