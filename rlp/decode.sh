@@ -58,23 +58,20 @@ decode_length() {
     prefix=$((16#${input:0:2}))
     if [ "$prefix" -le 127 ]; then #0x7f
         result=(0 2 str)
-    elif [ "$prefix" -le 183 ] && [ "$length" -gt $((prefix-128)) ]; then #0xb7
+    elif [ "$prefix" -le 183 ]; then #0xb7
         strLen=$(((prefix-128)*2))
         result=(2 "$strLen" str)
-    elif [ "$prefix" -le 191 ] && [ "$length" -gt $((prefix-183)) ] && [ "$length" -gt $((prefix-183+${input:2:$(((prefix-183)*2))})) ]; then
+    elif [ "$prefix" -le 191 ]; then
         lenOfStrLen=$(((prefix-183)*2))
         strLen=$((16#${input:2:$lenOfStrLen}*2)) # convert to base 10 and mult by 2
-        result=($((2+"$lenOfStrLen")) "$strLen" str)
-    elif [ "$prefix" -le 247 ] && [ "$length" -gt $((prefix-192)) ]; then
-        listLen=$((prefix-192))
-        result=(1 "$listLen" list)
-    elif [ "$prefix" -le 255 ] && [ "$length" -gt $((prefix-247)) ] && [ "$length" -gt $((prefix-247+${input:2:$(((prefix-247)*2))})) ]; then
+        result=($((2+lenOfStrLen)) "$strLen" str)
+    elif [ "$prefix" -le 247 ]; then
+        listLen=$((2*(prefix-192)))
+        result=(2 "$listLen" list)
+    else
         lenOfListLen=$(((prefix-247)*2))
         listLen=$((16#${input:2:$lenOfListLen}*2)) # convert to base 10 and mult by 2
-        result=($((2+"$lenOfListLen")) "$listLen" list)
-    else
-        printf "input doesn't conform RLP encoding scheme" >&2
-        exit 1
+        result=($((2+lenOfListLen)) "$listLen" list)
     fi
     printf "${result[*]}"
 }
@@ -83,18 +80,12 @@ rlp_decode_string() {
     local input=$1
     local offset=$2
     local dataLen=$3
-    # echo "input: $input"
-    # echo "offset: $offset"
-    # echo "dataLen: $dataLen"
 
     if [ "$dataLen" -eq 0 ]; then
         printf ""
     else
         local value=$(hex_to_int "$input")
         local isNotPrintable=$(not_printable "$input")
-        # echo "isNotPrintable: $isNotPrintable"
-        # echo "value: $value"
-        # echo "toStr: $(hex_to_str $input)"
         if [ "$value" -gt 0 ] && [ "$value" -lt 128 ]; then
             printf "$value"
         elif [ "$isNotPrintable" -eq "0" ]; then 
@@ -107,51 +98,38 @@ rlp_decode_string() {
     fi
 }
 
-# Decode a list from RLP
 rlp_decode_list() {
     local input="$1"
-    local prefix
-    local length
-    local data
-    echo -n "["
+    local result="["
+    local first=true
+
     while [ -n "$input" ]; do
-        prefix=$(echo "$input" | cut -c1-2)
-        if [ "$(printf "%d" "0x$prefix")" -lt 128 ]; then
-            printf "\\x$prefix" | xxd -r | xxd
-            input=$(echo "$input" | cut -c3-)
-        elif [ "$(printf "%d" "0x$prefix")" -lt 184 ]; then
-            length=$((0x$prefix - 0x80))
-            data=$(echo "$input" | cut -c3-$((2 * $length + 2)))
-            echo -n "\"$(echo "$data" | xxd -r -p)\""
-            input=$(echo "$input" | cut -c$((2 * $length + 3))-)
-        elif [ "$(printf "%d" "0x$prefix")" -lt 192 ]; then
-            local length_of_length=$((0x$prefix - 0xb7))
-            length=$(echo "$input" | cut -c3-$((2 * $length_of_length + 2)) | xxd -r -p | od -An -t u1)
-            data=$(echo "$input" | cut -c$((2 * $length_of_length + 3))-$((2 * $length + 2 * $length_of_length + 2)))
-            echo -n "\"$(echo "$data" | xxd -r -p)\""
-            input=$(echo "$input" | cut -c$((2 * $length + 2 * $length_of_length + 3))-)
-        elif [ "$(printf "%d" "0x$prefix")" -lt 248 ]; then
-            length=$((0x$prefix - 0xc0))
-            if [ "$length" -eq 0 ]; then
-                echo -n "[]"
-                break;
+        local offset dataLen type
+        read -r offset dataLen type <<< "$(decode_length "$input")"
+
+        if [ "$type" = "str" ]; then
+            local item="${input:$offset:$dataLen}"
+            if [ "$first" = true ]; then
+                first=false
+            else
+                result+=","
             fi
-            data=$(echo "$input" | cut -c3-$((2 * $length + 2)))
-            echo -n "$(rlp_decode_list "$data")"
-            input=$(echo "$input" | cut -c$((2 * $length + 3))-)
-        else
-            local length_of_length=$((0x$prefix - 0xf7))
-            length=$(echo "$input" | cut -c3-$((2 * $length_of_length + 2)) | xxd -r -p | od -An -t u1)
-            data=$(echo "$input" | cut -c$((2 * $length_of_length + 3))-$((2 * $length + 2 * $length_of_length + 2)))
-            echo -n "$(rlp_decode_list "$data")"
-            input=$(echo "$input" | cut -c$((2 * $length + 2 * $length_of_length + 3))-)
+            result+="$(rlp_decode_string "$item" 0 "$((dataLen/2))")"
+        elif [ "$type" = "list" ]; then
+            local sublist="${input:$offset:$dataLen}"
+            if [ "$first" = true ]; then
+                first=false
+            else
+                result+=","
+            fi
+            result+="$(rlp_decode_list "$sublist")"
         fi
 
-        if [ -n "$input" ]; then
-            echo -n ","
-        fi
+        input="${input:$((offset+dataLen))}"
     done
-    echo -n "]"
+
+    result+="]"
+    echo "$result"
 }
 
 rlp_decode() {
@@ -162,15 +140,14 @@ rlp_decode() {
     local output=""
     local offset dataLen type
     
-    # Use read to split the output of decode_length into separate variables
-    IFS=' ' read -r offset dataLen type <<< "$(decode_length "${input}")"
+    read -r offset dataLen type <<< "$(decode_length "${input}")"
 
     if [ "$type" = "str" ]; then
-        output="${input:$offset:$((dataLen*2))}"
-        printf '%s' "$(rlp_decode_string "$output" "$offset" "$dataLen")"
+        output="${input:$offset:$dataLen}"
+        printf '%s' "$(rlp_decode_string "$output" "$offset" "$((dataLen/2))")"
     elif [ "$type" = "list" ]; then
-        output="${input:2:$((dataLen*2))}"
-        printf '%s' "$(rlp_decode "$output")"
+        output="${input:$offset:$dataLen}"
+        printf '%s' "$(rlp_decode_list "$output")"
     fi
 }
 
