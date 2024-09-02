@@ -74,9 +74,12 @@ rlp_encode_int() {
     local input_hex length
     input_hex=$(dec_to_hex "$input")
     length=$(( (${#input_hex}+1)/2 ))
-    if [ "$length" -eq 1 ] && [ "$input" -lt 128 ]
+    if [ "$input" -eq 0 ]
     then
-        printf "${input_hex//00/80}" #If input is non-value 0x00, RLP encoding is 0x80
+        printf "80"
+    elif [ "$length" -eq 1 ] && [ "$input" -lt 128 ]
+    then
+        printf "$input_hex"
     else
         printf "$(rlp_encode_len $length 0x80)$input_hex"
     fi
@@ -122,7 +125,7 @@ rlp_encode() {
         rlp_encode_list "${input:1:$((length-2))}"
     elif [ "$input" -eq "$input" ] 2> /dev/null # True if $input is algebraically equal
     then
-        rlp_encode_int "$input" "$length"
+        rlp_encode_int "$input"
     else
         rlp_encode_str "$input" "$length"
     fi
