@@ -5,7 +5,7 @@ hex_to_char() {
 }
 
 hex_to_str() {
-    echo -n "$1" | xxd -r -p
+    printf "$1" | xxd -r -p
 }
 
 hex_to_int() {
@@ -17,18 +17,21 @@ hex_to_big_int() {
     local dec
 
     # Remove leading zeros
-    hex=$(echo "$hex" | sed 's/^0*//')
+    hex=$(printf '%s' "$hex" | sed 's/^0*//')
 
     # If hex is empty after removing zeros, it was all zeros
     if [ -z "$hex" ]; then
-        echo "0"
+        printf '0'
         return
     fi
 
+    # Convert hex to uppercase
+    hex=$(printf '%s' "$hex" | tr '[:lower:]' '[:upper:]')
+
     # Convert hex to decimal using bc
     # BC_LINE_LENGTH=0 is required to prevent bc from wrapping lines
-    dec=$(echo "ibase=16; ${hex^^}" | BC_LINE_LENGTH=0 bc)
-    echo "$dec"
+    dec=$(printf 'ibase=16; %s\n' "$hex" | BC_LINE_LENGTH=0 bc)
+    printf '%s' "$dec"
 }
 
 not_printable() {
@@ -85,7 +88,7 @@ rlp_decode_string() {
     # echo "dataLen: $dataLen"
 
     if [ "$dataLen" -eq 0 ]; then
-        echo -n ""
+        printf ""
     else
         local value=$(hex_to_int "$input")
         local isNotPrintable=$(not_printable "$input")
@@ -93,13 +96,13 @@ rlp_decode_string() {
         # echo "value: $value"
         # echo "toStr: $(hex_to_str $input)"
         if [ "$value" -gt 0 ] && [ "$value" -lt 128 ]; then
-            echo -n "$value"
+            printf "$value"
         elif [ "$isNotPrintable" -eq "0" ]; then 
             hex_to_str "$input"
         elif [ "$value" -lt 0 ] || [ "$value" -lt $((2**63 - 1)) ]; then
             hex_to_big_int "$input"
         else
-            echo "$value"
+            printf "$value"
         fi
     fi
 }
@@ -157,19 +160,18 @@ rlp_decode() {
         return
     fi
     local output=""
-    IFS=' ' read -r -a arr <<< $(decode_length "${input}")
-
-    local offset=${arr[0]}
-    local dataLen=${arr[1]}
-    local type=${arr[2]}
+    local offset dataLen type
     
-    if [ "$type" == "str" ]; then
-        output=$(printf "${input:$offset:(($dataLen*2))}")
-        echo -n $(rlp_decode_string "$output" "$offset" "$dataLen")
-    elif [ "$type" == "list" ]; then
-        output=$(printf "${input:2:(($dataLen*2))}")
-        echo -n "$(rlp_decode $output)"
-    fi    
+    # Use read to split the output of decode_length into separate variables
+    IFS=' ' read -r offset dataLen type <<< "$(decode_length "${input}")"
+
+    if [ "$type" = "str" ]; then
+        output="${input:$offset:$((dataLen*2))}"
+        printf '%s' "$(rlp_decode_string "$output" "$offset" "$dataLen")"
+    elif [ "$type" = "list" ]; then
+        output="${input:2:$((dataLen*2))}"
+        printf '%s' "$(rlp_decode "$output")"
+    fi
 }
 
 # decode_length 83646f67
