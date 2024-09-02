@@ -35,16 +35,16 @@ hex_to_big_int() {
 }
 
 not_printable() {
-    local result
-    result=0
-    for ((i=0;i<${#1};i+=2));do 
-        if [ "$(hex_to_int ${1:i:2})" -lt 32 ] || [ "$(hex_to_int ${1:i:2})" -gt 126 ]
-        then
-            result=1;
-            break;
+    local hex="$1"
+    local len=${#hex}
+    for ((i=0; i<len; i+=2)); do
+        local byte=$((16#${hex:i:2}))
+        if ((byte < 32 || byte > 126)); then
+            printf '1'
+            return
         fi
     done
-    printf "$result"
+    printf '0'
 }
 
 decode_length() {
