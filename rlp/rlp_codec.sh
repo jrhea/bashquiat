@@ -13,11 +13,21 @@ char_to_int() {
 }
 
 str_to_hex() {
-    for ((i=0;i<${#1};i++));do printf "$(char_to_hex "${1:$i:1}")";done
+    for ((i=0;i<${#1};i++));do 
+        printf "$(char_to_hex "${1:$i:1}")";
+    done
 }
 
 hex_to_str() {
-    printf "$1" | xxd -r -p
+    local hex="$1"
+    local str=""
+    local i
+
+    for ((i = 0; i < ${#hex}; i += 2)); do
+        str+=$(hex_to_char "${hex:i:2}")
+    done
+
+    printf "%s" "$str"
 }
 
 # doesn't pad with 0s
