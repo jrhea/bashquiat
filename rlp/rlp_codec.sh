@@ -1,7 +1,22 @@
 #!/bin/bash
 
 to_upper_hex() {
-    printf '%s' "$1" | sed 'y/abcdef/ABCDEF/'
+    local hex="$1"
+    local result=""
+    local char
+    
+    declare -A hex_uc=([a]=A [b]=B [c]=C [d]=D [e]=E [f]=F)
+    
+    for ((i=0; i<${#hex}; i++)); do
+        char="${hex:i:1}"
+        if [[ ${hex_uc[$char]+_} ]]; then
+            result+="${hex_uc[$char]}"
+        else
+            result+="$char"
+        fi
+    done
+    
+    printf '%s' "$result"
 }
 
 remove_leading_zeros() {
