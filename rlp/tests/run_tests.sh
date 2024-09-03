@@ -1,7 +1,6 @@
 #!/bin/bash
 
-source encode.sh
-source decode.sh
+source rlp_codec.sh
 
 # Colors for output
 GREEN='\033[0;32m'
