@@ -1,22 +1,11 @@
 #!/bin/bash
 
 to_upper_hex() {
-    local hex="$1"
-    local result=""
-    local char
-    
-    declare -A hex_uc=([a]=A [b]=B [c]=C [d]=D [e]=E [f]=F)
-    
-    for ((i=0; i<${#hex}; i++)); do
-        char="${hex:i:1}"
-        if [[ ${hex_uc[$char]+_} ]]; then
-            result+="${hex_uc[$char]}"
-        else
-            result+="$char"
-        fi
-    done
-    
-    printf '%s' "$result"
+    printf '%s' "$1" | sed 'y/abcdef/ABCDEF/'
+}
+
+to_lower_hex() {
+    printf '%s' "$1" | sed 'y/ABCDEF/abcdef/'
 }
 
 remove_leading_zeros() {
@@ -209,7 +198,8 @@ rlp_encode_int() {
         printf -v input_hex "%s" "$(printf "obase=16; %s\n" "$input" | bc)"
         # Ensure even number of characters
         [ $((${#input_hex} % 2)) -eq 1 ] && input_hex="0$input_hex"
-        printf -v input_hex "%s" "${input_hex,,}"  # Convert to lowercase
+        # Convert to lowercase
+        input_hex=$(to_lower_hex "$input_hex")
         length=$((${#input_hex} / 2))
         printf "%s%s" "$(rlp_encode_len $length 80)" "$input_hex"
     fi
