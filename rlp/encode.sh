@@ -14,8 +14,7 @@ str_to_hex() {
 
 dec_to_hex() {
     printf -v num "%x" "$1"
-    if [ "$(( (${#num}+1)/2 ))" -eq "$(( (${#num})/2 ))" ]
-    then
+    if [ "$(( (${#num}+1)/2 ))" -eq "$(( (${#num})/2 ))" ]; then
         printf "$num"
     else
         printf 0"$num"
@@ -37,11 +36,9 @@ rlp_encode_len() {
     local length=$1
     local offset
     offset=$(hex_to_dec "$2")
-    if [ "$length" -lt 56 ]
-    then
+    if [ "$length" -lt 56 ]; then
         printf "$(dec_to_hex $((length + offset)))"
-    elif [ "$length" -lt $((2**63 - 1)) ] # TODO: this should be 2^64, but bash overflows at 2^63
-    then
+    elif [ "$length" -lt $((2**63 - 1)) ]; then # TODO: this should be 2^64, but bash overflows at 2^63
         local length_binary length_bytes
         length_binary=$(dec_to_bin "$length")
         # Because dec_to_bin() doesn't pad with zeros we ensure that truncating arithmetic rounds 
@@ -58,11 +55,9 @@ rlp_encode_len() {
 rlp_encode_str() {
     local input=$1
     local length=$2
-    if [ "$length" -eq 0 ]
-    then
+    if [ "$length" -eq 0 ]; then
         printf "80"
-    elif [ "$length" -eq 1 ] && [ "$(char_to_dec "$input")" -lt 128 ]
-    then
+    elif [ "$length" -eq 1 ] && [ "$(char_to_dec "$input")" -lt 128 ]; then
         printf "$(char_to_hex "$input")"
     else
         printf "%s%s" "$(rlp_encode_len "$length" 0x80)" "$(str_to_hex "$input")"
@@ -71,16 +66,20 @@ rlp_encode_str() {
 
 rlp_encode_int() {
     local input=$1
-    local input_hex length
-    input_hex=$(dec_to_hex "$input")
-    length=$(( (${#input_hex}+1)/2 ))
-    if [ "$input" -eq 0 ]
-    then
+    local input_hex 
+    local length
+
+    if [ "$input" = "0" ]; then
         printf "80"
-    elif [ "$length" -eq 1 ] && [ "$input" -lt 128 ]
-    then
-        printf "$input_hex"
+    elif [ "$input" -lt 128 ] 2>/dev/null; then
+        printf "$(dec_to_hex "$input")"
     else
+        # Handle large integers as strings
+        input_hex=$(echo "obase=16; $input" | bc)
+        # Ensure even number of characters
+        [ $((${#input_hex} % 2)) -eq 1 ] && input_hex="0$input_hex"
+        input_hex=$(echo "$input_hex" | tr '[:upper:]' '[:lower:]')
+        length=$((${#input_hex} / 2))
         printf "$(rlp_encode_len $length 0x80)$input_hex"
     fi
 }
@@ -93,14 +92,11 @@ rlp_encode_list() {
     # Search for a delimiter not surrounded in brackets
     for (( i=0; i<${#input}; i++ ));
     do
-        if [ "${input:$i:1}" == "[" ]
-        then
+        if [ "${input:$i:1}" == "[" ]; then
             ((count=count + 1))
-        elif [ "${input:$i:1}" == "]" ]
-        then
+        elif [ "${input:$i:1}" == "]" ]; then
             ((count=count - 1))
-        elif [ "${input:$i:1}" == "," ] && [ $count -eq 0 ]
-        then
+        elif [ "${input:$i:1}" == "," ] && [ $count -eq 0 ]; then
             # replace the character in the ith position with a new delimiter that we can split on 
             input=$(printf "$input" | sed s/./\|/$((i + 1)))
         fi
@@ -119,12 +115,10 @@ rlp_encode_list() {
 rlp_encode() {
     local input=$1
     local length=${#input}
-    if [ "${input:0:1}" == "[" ] && [ "${input:$((length-1)):1}" == "]" ]
-    then
+    if [ "${input:0:1}" == "[" ] && [ "${input:$((length-1)):1}" == "]" ]; then
         # remove outer brackets
         rlp_encode_list "${input:1:$((length-2))}"
-    elif [ "$input" -eq "$input" ] 2> /dev/null # True if $input is algebraically equal
-    then
+    elif [[ $input =~ ^[0-9]+$ ]]; then
         rlp_encode_int "$input"
     else
         rlp_encode_str "$input" "$length"
