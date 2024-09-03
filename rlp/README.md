@@ -1,6 +1,6 @@
 # RLP in Bash
 
-This code implements the RLP specification in Bash. This uses pure Bash where possible, but in some cases I was forced to use core-utils like `bc` and `sed` in certain cases.
+This code implements the RLP specification in Bash. This uses pure Bash where possible, but in some cases I was forced to use core-utils like `bc` and `sed`.
 
 > Note: This was written and tested on Linux so no guarantees that it will work on MacOS
 
