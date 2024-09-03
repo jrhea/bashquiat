@@ -1,5 +1,18 @@
 #!/bin/bash
 
+to_upper_hex() {
+    printf '%s' "$1" | sed 'y/abcdef/ABCDEF/'
+}
+
+remove_leading_zeros() {
+    local hex="$1"
+    # Remove leading zeros, but keep at least one digit
+    while [[ "${hex:0:1}" == "0" && ${#hex} -gt 1 ]]; do
+        hex="${hex:1}"
+    done
+    printf '%s' "$hex"
+}
+
 char_to_hex() {
     printf  "%02x" "'${1}"
 }
@@ -55,7 +68,7 @@ hex_to_big_int() {
     local dec
 
     # Remove leading zeros
-    hex=$(printf '%s' "$hex" | sed 's/^0*//')
+    hex=$(remove_leading_zeros "$hex")
 
     # If hex is empty after removing zeros, it was all zeros
     if [ -z "$hex" ]; then
@@ -64,7 +77,7 @@ hex_to_big_int() {
     fi
 
     # Convert hex to uppercase
-    hex=$(printf '%s' "$hex" | tr '[:lower:]' '[:upper:]')
+    hex=$(to_upper_hex "$hex")
 
     # Convert hex to decimal using bc
     # BC_LINE_LENGTH=0 is required to prevent bc from wrapping lines
