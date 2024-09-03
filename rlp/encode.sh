@@ -66,21 +66,21 @@ rlp_encode_str() {
 
 rlp_encode_int() {
     local input=$1
-    local input_hex 
+    local input_hex
     local length
 
     if [ "$input" = "0" ]; then
         printf "80"
     elif [ "$input" -lt 128 ] 2>/dev/null; then
-        printf "$(dec_to_hex "$input")"
+        printf "%s" "$(dec_to_hex "$input")"
     else
         # Handle large integers as strings
-        input_hex=$(echo "obase=16; $input" | bc)
+        printf -v input_hex "%s" "$(printf "obase=16; %s\n" "$input" | bc)"
         # Ensure even number of characters
         [ $((${#input_hex} % 2)) -eq 1 ] && input_hex="0$input_hex"
-        input_hex=$(echo "$input_hex" | tr '[:upper:]' '[:lower:]')
+        printf -v input_hex "%s" "${input_hex,,}"  # Convert to lowercase
         length=$((${#input_hex} / 2))
-        printf "$(rlp_encode_len $length 0x80)$input_hex"
+        printf "%s%s" "$(rlp_encode_len $length 0x80)" "$input_hex"
     fi
 }
 
