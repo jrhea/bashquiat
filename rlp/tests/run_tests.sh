@@ -1,6 +1,7 @@
 #!/bin/bash
 
-source rlp_codec.sh
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+source $DIR/../rlp_codec.sh
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -53,4 +54,4 @@ run_tests() {
     printf "Failed tests: %d\n" $((total_tests - passed_tests))
 }
 
-run_tests "tests/tests.json"
+run_tests "rlp/tests/tests.json"
