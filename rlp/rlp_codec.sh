@@ -1,7 +1,7 @@
 #!/bin/bash
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-source $DIR/../utils/utils.sh
+source $DIR/../rlp/utils.sh
 
 rlp_encode_len() {
     local length=$1
