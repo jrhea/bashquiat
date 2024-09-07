@@ -105,11 +105,10 @@ encode_masked_header() {
     printf '%s' "$masked_header"
 }
 
-# Function to encode the WHOAREYOU message
+# Function to encode the WHOAREYOU message (flag = 0x01)
 encode_whoareyou() {
     local dest_node_id="$1"
     local version="$2"
-    local flag="$3"
     local nonce="$4"
     local id_nonce="$5"
     local enr_seq="$6"
@@ -120,6 +119,9 @@ encode_whoareyou() {
         masking_iv=$(generate_random_bytes 32)
     fi
 
+    # WHOAREYOU message flag
+    local flag="01"
+    
     # Fixed authdata size for WHOAREYOU (24 bytes)
     local authdata_size="0018"
 
@@ -130,7 +132,7 @@ encode_whoareyou() {
     printf '%s%s' "$masking_iv" "$masked_header"
 }
 
-# Decode WHOAREYOU message
+# Decode WHOAREYOU message (flag = 0x01)
 decode_whoareyou() {
     local packet=$1
     local dest_id=$2
