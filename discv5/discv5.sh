@@ -37,6 +37,26 @@ generate_random_bytes() {
     printf "%s" "$result"
 }
 
+# Function to parse challenge data
+parse_challenge_data() {
+    local challenge_data="$1"
+
+    # Extract masking IV
+    printf -v MASKING_IV "%s" "${challenge_data:0:32}"
+
+    # Extract and parse static header
+    local static_header_data="${challenge_data:32:46}"  # 23 bytes (46 hex characters)
+    printf -v PROTOCOL_ID "%s" "${header_data:0:12}"
+    printf -v VERSION "%s" "${header_data:12:4}"
+    printf -v FLAG "%s" "${header_data:16:2}"
+    printf -v NONCE "%s" "${header_data:18:24}"
+    printf -v AUTHDATA_SIZE "%s" "${header_data:42:4}"
+
+    # Extract authdata
+    printf -v ID_NONCE "%s" "${challenge_data:78:32}"
+    printf -v ENR_SEQ "%s" "${challenge_data:110:16}"
+}
+
 # static-header = protocol-id || version || flag || nonce || authdata-size
 # protocol-id   = "discv5"
 # version       = 0x0001
@@ -136,45 +156,18 @@ decode_whoareyou() {
 
     # Verify protocol ID
     if [ "$protocol_id" != "646973637635" ]; then  # "discv5" in hex
-        print "Invalid protocol ID"
+        printf "Invalid protocol ID"
         return 1
     fi
 
     # Output decoded components
-    echo "Protocol ID: $protocol_id"
-    echo "Version: $version"
-    echo "Flag: $flag"
-    echo "Nonce: $nonce"
-    echo "Authdata size: $authdata_size"
-    echo "ID Nonce: $id_nonce"
-    echo "ENR Seq: $enr_seq"
-}
-
-# Function to parse the static header portion of the challenge data
-parse_static_header() {
-    local header_data="$1"
-
-    printf -v PROTOCOL_ID "%s" "${header_data:0:12}"
-    printf -v VERSION "%s" "${header_data:12:4}"
-    printf -v FLAG "%s" "${header_data:16:2}"
-    printf -v NONCE "%s" "${header_data:18:24}"
-    printf -v AUTHDATA_SIZE "%s" "${header_data:42:4}"
-}
-
-# Function to parse challenge data
-parse_challenge_data() {
-    local challenge_data="$1"
-
-    # Extract masking IV
-    printf -v MASKING_IV "%s" "${challenge_data:0:32}"
-
-    # Extract and parse static header
-    local static_header_data="${challenge_data:32:46}"  # 23 bytes (46 hex characters)
-    parse_static_header "$static_header_data"
-
-    # Extract authdata
-    printf -v ID_NONCE "%s" "${challenge_data:78:32}"
-    printf -v ENR_SEQ "%s" "${challenge_data:110:16}"
+    printf "Protocol ID: $protocol_id\n"
+    printf "Version: $version\n"
+    printf "Flag: $flag\n"
+    printf "Nonce: $nonce\n"
+    printf "Authdata size: $authdata_size\n"
+    printf "ID Nonce: $id_nonce\n"
+    printf "ENR Seq: $enr_seq\n"
 }
 
 test_whoareyou() {
