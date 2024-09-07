@@ -1,14 +1,14 @@
 # RLP in Bash
 
+This code implements the RLP specification in Bash. This uses pure Bash where possible, but in some cases I am forced to use core-utils.
+
 #### 🚧 This is a WIP 🚧
-
-This code implements the RLP specification in Bash. This uses pure Bash where possible, but in some cases I was forced to use core-utils like `bc` and `sed`.
-
 #### ⚠️ This was written and tested on Linux so no guarantees that it will work on MacOS ⚠️
 
 ## Why?
 
-To promote chaos.
+Breaking clients is fun.
+### ☠️
 
 ## Test
 
