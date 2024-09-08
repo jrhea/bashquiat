@@ -13,8 +13,6 @@ test_whoareyou() {
         printf 'Using provided challenge data\n'
     else
         # Generate random values for components
-        VERSION="0001"  # This is typically fixed
-        FLAG="01"       # This is typically fixed for WHOAREYOU
         NONCE=$(generate_random_bytes 24)
         ID_NONCE=$(generate_random_bytes 32)
         printf -v ENR_SEQ '%016x' $((RANDOM % 1000000))  # Random ENR sequence number
@@ -27,7 +25,7 @@ test_whoareyou() {
         printf 'MASKING_IV: %s\n' "$MASKING_IV"
     fi
 
-    whoareyou_message=$(encode_whoareyou "$DEST_ID" "$VERSION" "$FLAG" "$NONCE" "$ID_NONCE" "$ENR_SEQ" "$MASKING_IV")
+    whoareyou_message=$(encode_whoareyou "$DEST_ID" "$NONCE" "$ID_NONCE" "$ENR_SEQ" "$MASKING_IV")
 
     printf 'WHOAREYOU Message: %s\n' "$whoareyou_message"
     printf 'Length: %d\n' "${#whoareyou_message}"

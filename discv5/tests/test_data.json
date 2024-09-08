@@ -14,7 +14,7 @@
     "nonce": "ffffffffffffffffffffffff",
     "read_key": "00000000000000000000000000000000",
     "ping.req_id": "00000001",
-    "ping.enr-seq": "2",
+    "ping.enr_seq": "2",
     "expected_output": "00000000000000000000000000000000088b3d4342774649325f313964a39e55ea96c005ad52be8c7560413a7008f16c9e6d2f43bbea8814a546b7409ce783d34c4f53245d08dab84102ed931f66d1492acb308fa1c6715b9d139b81acbdcc"
   }
 }

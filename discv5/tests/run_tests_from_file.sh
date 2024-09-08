@@ -3,7 +3,7 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 source $DIR/../discv5.sh
 
-# Function to parse JSON without jq
+# Function to parse JSON
 parse_json() {
     local json_content="$1"
     local key="$2"
@@ -16,6 +16,27 @@ parse_json() {
     
     echo "$json_content"
 }
+
+# Function to parse whoareyou challenge data
+parse_whoareyou_challenge_data() {
+    local challenge_data="$1"
+
+    # Extract masking IV
+    printf -v MASKING_IV "%s" "${challenge_data:0:32}"
+
+  # Extract and parse static header
+    local static_header_data="${challenge_data:32:46}"  # 23 bytes (46 hex characters)
+    printf -v PROTOCOL_ID "%s" "${static_header_data:0:12}"
+    printf -v VERSION "%s" "${static_header_data:12:4}"
+    printf -v FLAG "%s" "${static_header_data:16:2}"
+    printf -v NONCE "%s" "${static_header_data:18:24}"
+    printf -v AUTHDATA_SIZE "%s" "${static_header_data:42:4}"
+
+    # Extract authdata
+    printf -v ID_NONCE "%s" "${challenge_data:78:32}"
+    printf -v ENR_SEQ "%s" "${challenge_data:110:16}"
+}
+
 
 run_whoareyou_test() {
     local test_name="$1"
@@ -44,9 +65,9 @@ run_whoareyou_test() {
     printf 'ENR Seq: %s\n' "$enr_seq"
     printf 'Expected Output: %s\n' "$expected_output"
 
-    parse_challenge_data "$challenge_data"
+    parse_whoareyou_challenge_data "$challenge_data"
 
-    whoareyou_message=$(encode_whoareyou "$dest_node_id" "$VERSION" "$FLAG" "$NONCE" "$ID_NONCE" "$ENR_SEQ" "$MASKING_IV")
+    whoareyou_message=$(encode_whoareyou "$dest_node_id" "$NONCE" "$ID_NONCE" "$ENR_SEQ" "$MASKING_IV")
 
     printf 'Generated WHOAREYOU Message: %s\n' "$whoareyou_message"
     printf 'Length: %d\n' "${#whoareyou_message}"
@@ -68,14 +89,16 @@ run_ping_test() {
     read -r src_node_id
     read -r dest_node_id
     read -r nonce
-    read -r id_nonce
+    read -r read_key
+    read -r req_id
     read -r enr_seq
     read -r expected_output
 
     src_node_id=$(printf "%s" "$src_node_id" | cut -d: -f2 | sed 's/^ *//g' | sed 's/.\{1\}$//' | tr -d "\"" | tr -d "\n")
     dest_node_id=$(printf "%s" "$dest_node_id" | cut -d: -f2 | sed 's/^ *//g' | sed 's/.\{1\}$//' | tr -d "\"" | tr -d "\n")
     nonce=$(printf "%s" "$nonce" | cut -d: -f2 | sed 's/^ *//g' | sed 's/.\{1\}$//' | tr -d "\"" | tr -d "\n")
-    id_nonce=$(printf "%s" "$id_nonce" | cut -d: -f2 | sed 's/^ *//g' | sed 's/.\{1\}$//' | tr -d "\"" | tr -d "\n")
+    read_key=$(printf "%s" "$read_key" | cut -d: -f2 | sed 's/^ *//g' | sed 's/.\{1\}$//' | tr -d "\"" | tr -d "\n")
+    req_id=$(printf "%s" "$req_id" | cut -d: -f2 | sed 's/^ *//g' | sed 's/.\{1\}$//' | tr -d "\"" | tr -d "\n")
     enr_seq=$(printf "%s" "$enr_seq" | cut -d: -f2 | sed 's/^ *//g' | sed 's/.\{1\}$//' | tr -d "\"" | tr -d "\n")
     expected_output=$(printf "%s" "$expected_output" | cut -d: -f2 | sed 's/^ *//g' | sed 's/.\{1\}$//' | tr -d "\"" | tr -d "\n")
 
@@ -83,27 +106,25 @@ run_ping_test() {
     printf 'Source Node ID: %s\n' "$src_node_id"
     printf 'Destination Node ID: %s\n' "$dest_node_id"
     printf 'Nonce: %s\n' "$nonce"
-    printf 'ID Nonce: %s\n' "$id_nonce"
+    printf 'Read Key: %s\n' "$read_key"
+    printf 'Request ID: %s\n' "$req_id"
     printf 'ENR Seq: %s\n' "$enr_seq"
     printf 'Expected Output: %s\n' "$expected_output"
 
-    parse_challenge_data "$challenge_data"
-
-    ping_message=$(encode_ping "$dest_node_id" "$VERSION" "$FLAG" "$NONCE" "$ID_NONCE" "$ENR_SEQ" "$MASKING_IV")
-
-    printf 'Generated PING Message: %s\n' "$ping_message"
-    printf 'Length: %d\n' "${#ping_message}"
+    ping_message=$(encode_ping_message "$src_node_id" "$dest_node_id" "$nonce" "$read_key" "$req_id" "$enr_seq")
 
     if [ "$ping_message" = "$expected_output" ]; then
         printf 'Test passed: Output matches expected value\n'
     else
         printf 'Test failed: Output does not match expected value\n'
         printf 'Expected: %s\n' "$expected_output"
+        printf 'Length: %d\n' "${#expected_output}"
         printf 'Got:      %s\n' "$ping_message"
+        printf 'Length: %d\n' "${#ping_message}"
     fi
 
     printf 'Decoding the generated PING message:\n'
-    decode_whoareyou "$ping_message" "$dest_node_id"
+    decode_ping_message "$ping_message" "$dest_node_id" "$read_key"
 }
 
 run_tests_from_json() {
@@ -131,4 +152,4 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 
-run_tests_from_json "$DIR/$1"
+run_tests_from_json "$1"
