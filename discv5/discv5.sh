@@ -4,6 +4,37 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 source $DIR/utils.sh
 source $DIR/../rlp/rlp_codec.sh
 
+ensure_hex() {
+    local input="$1"
+    local byte_length="$2"
+    local hex_length=$((byte_length * 2))
+
+    # If input is already valid hex of correct length, return it
+    if [[ $input =~ ^[0-9A-Fa-f]{$hex_length}$ ]]; then
+        printf "%s" "$input"
+        return 0
+    fi
+
+    # If input is a number, convert to hex
+    if [[ $input =~ ^[0-9]+$ ]]; then
+        printf "%0${hex_length}x" "$input"
+        return 0
+    fi
+
+    # If input is a string, convert each character to hex
+    if [[ $input =~ ^[a-zA-Z0-9]+$ ]]; then
+        local hex=""
+        for (( i=0; i<${#input}; i++ )); do
+            hex+=$(printf "%02x" "'${input:$i:1}")
+        done
+        printf "%s" "${hex:0:$hex_length}"
+        return 0
+    fi
+
+    # If we get here, input couldn't be converted
+    return 1
+}
+
 # static-header = protocol-id || version || flag || nonce || authdata-size
 # protocol-id   = "discv5"
 # version       = 0x0001
@@ -27,7 +58,6 @@ encode_static_header() {
     printf "${protocol_id}${version}${flag}${nonce}${authdata_size}"
 }
 
-
 # Function to encode the PING message (flag = 0x02)
 encode_ping_message() {
     local src_node_id="$1"
@@ -36,6 +66,20 @@ encode_ping_message() {
     local read_key="$4"
     local req_id="$5"
     local enr_seq="$6"
+
+    # Convert inputs to hex if they're not already
+    src_node_id=$(ensure_hex "$src_node_id" 32)
+    dest_node_id=$(ensure_hex "$dest_node_id" 32)
+    nonce=$(ensure_hex "$nonce" 12)
+    read_key=$(ensure_hex "$read_key" 16)
+    req_id=$(ensure_hex "$req_id" 1)
+    enr_seq=$(ensure_hex "$enr_seq" 1)
+
+    # Check if any conversion failed
+    if [[ -z "$src_node_id" || -z "$dest_node_id" || -z "$nonce" || -z "$read_key" || -z "$req_id" || -z "$enr_seq" ]]; then
+        printf "Error: Failed to convert inputs to valid hex strings\n" >&2
+        return 1
+    fi
 
     # Ensure nonce and read_key are the correct length
     nonce=$(printf '%024s' "$nonce")
@@ -58,7 +102,7 @@ encode_ping_message() {
     local static_header=$(encode_static_header "$version" "$flag" "$nonce" "$authdata_size")
 
     # Combine static header and src_node_id for the full header
-    #authdata=$(printf '%s' "${src_node_id:0:46}")  # Note: this breaks the decoding if uncommented
+    authdata=$src_node_id  # SRC Node ID is 32 bytes (64 characters)
     local header="${static_header}${authdata}"
     
 
@@ -82,28 +126,8 @@ encode_ping_message() {
     local encrypted_message=$(python discv5/aes_gcm.py encrypt "$read_key" "$nonce" "$message_pt" "$message_ad")
     #local encrypted_message=$(printf '%s' "$message_pt" | hex_to_bin | /usr/local/libressl/bin/openssl enc -aes-128-gcm -K "$read_key" -iv "$nonce" | bin_to_hex)
 
-
     # Combine all parts
     local final_message="${message_ad}${encrypted_message}"
-
-    # Debug output (not part of the final message)
-    echo "Masking IV: $masking_iv" >&2
-    echo "Static header: $static_header" >&2
-    echo "Full header: $header" >&2
-    echo "Masked header: $masked_header" >&2
-    echo "Message type: $message_type" >&2
-    echo "Request ID: $req_id" >&2
-    echo "ENR Seq: $enr_seq" >&2
-    echo "RLP input: [\"$req_id\",\"$enr_seq\"]" >&2
-    echo "RLP message content (hex): $rlp_message_content" >&2
-    echo "RLP decoded: $(rlp_decode "$rlp_message_content")" >&2
-    echo "Nonce (used as IV): $nonce" >&2
-    echo "Read key: $read_key" >&2
-    echo "Message PT: $message_pt" >&2
-    echo "Encrypted message: $encrypted_message" >&2
-    echo "Message AD: $message_ad" >&2
-    echo "Final message: $final_message" >&2
-    echo "Final message length: ${#final_message}" >&2
 
     # Return only the final message
     printf '%s' "$final_message"
@@ -117,11 +141,11 @@ decode_ping_message() {
 
     # Extract masking IV and masked header
     local masking_iv=${packet:0:32}
-    local masked_header=${packet:32:126} 
+    local masked_header=${packet:32:126}
 
-    # Extract associated data and encrypted message text
-    local message_ad=${packet:0:78}
-    local cipher_text=${packet:78:144}
+    # Extract associated data and encrypted message
+    local message_ad=${packet:0:142}  # masking_iv + masked_header (32 + 110 = 142)
+    local encrypted_message=${packet:142:56}  # 28 bytes of ciphertext+tag (12 + 16 = 28)
 
     # Derive masking key (first 16 bytes of dest_node_id)
     local masking_key=${dest_node_id:0:32}
@@ -135,7 +159,7 @@ decode_ping_message() {
     local flag=${header:16:2}
     local nonce=${header:18:24}
     local authdata_size=${header:42:4}
-    local src_node_id=${header:46}
+    local src_node_id=${header:46:64}
 
     # Verify protocol ID
     if [ "$protocol_id" != "646973637635" ]; then  # "discv5" in hex
@@ -143,14 +167,12 @@ decode_ping_message() {
         return 1
     fi
 
-    # Verify flag (should be 02 for ordinary messages like PING)
+    # Verify flag (should be 00 for ordinary messages like PING)
     if [ "$flag" != "00" ]; then
         printf "Invalid flag: expected 00, got %s\n" "$flag"
         return 1
     fi
-
-    # Decrypt the message content
-    local decrypted_message=$(python discv5/aes_gcm.py decrypt "$read_key" "$nonce" "$cipher_text" "$message_ad")
+    local decrypted_message=$(python discv5/aes_gcm.py decrypt "$read_key" "$nonce" "$encrypted_message" "$message_ad")
 
     # Extract message type and content
     local message_type=${decrypted_message:0:2}
@@ -175,17 +197,29 @@ decode_ping_message() {
     printf "Nonce: %s\n" "$nonce"
     printf "Authdata size: %s\n" "$authdata_size"
     printf "Source Node ID: %s\n" "$src_node_id"
-    printf "Request ID: %s\n" "$req_id"
+    printf "Request ID: %s\n" "$req_id" 
     printf "ENR Sequence Number: %s\n" "$enr_seq"
 }
 
 # Function to encode the WHOAREYOU message (flag = 0x01)
-encode_whoareyou() {
+encode_whoareyou_message() {
     local dest_node_id="$1"
     local nonce="$2"
     local id_nonce="$3"
     local enr_seq="$4"
     local masking_iv="$5"
+
+    # Convert inputs to hex if they're not already
+    dest_node_id=$(ensure_hex "$dest_node_id" 32)
+    nonce=$(ensure_hex "$nonce" 12)
+    id_nonce=$(ensure_hex "$id_nonce" 16) # 16 bytes for ID nonce
+    enr_seq=$(ensure_hex "$enr_seq" 8)  # 8 bytes for ENR sequence number
+
+    # Check if any conversion failed
+    if [[ -z "$dest_node_id" || -z "$nonce" || -z "$id_nonce" || -z "$enr_seq" ]]; then
+        printf "Error: Failed to convert inputs to valid hex strings\n" >&2
+        return 1
+    fi
 
     # Generate random masking IV if not provided
     if [ -z "$masking_iv" ]; then
@@ -198,7 +232,7 @@ encode_whoareyou() {
     # WHOAREYOU message flag
     local flag="01"
     
-    # Fixed authdata size for WHOAREYOU (24 bytes)
+    # Fixed authdata size for WHOAREYOU = 24
     local authdata_size="0018"
 
     # Build the header
@@ -216,7 +250,7 @@ encode_whoareyou() {
 }
 
 # Decode WHOAREYOU message (flag = 0x01)
-decode_whoareyou() {
+decode_whoareyou_message() {
     local packet=$1
     local dest_id=$2
 
@@ -249,7 +283,7 @@ decode_whoareyou() {
     printf "Protocol ID: $protocol_id\n"
     printf "Version: $version\n"
     printf "Flag: $flag\n"
-    printf "Nonce: $nonce\n"
+    printf "Req Nonce: $nonce\n"
     printf "Authdata size: $authdata_size\n"
     printf "ID Nonce: $id_nonce\n"
     printf "ENR Seq: $enr_seq\n"

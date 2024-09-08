@@ -2,19 +2,15 @@ import sys
 import argparse
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-def aesgcm_encrypt(
-    key: bytes, nonce: bytes, plain_text: bytes, associated_data: bytes,
-) -> bytes:
+def aesgcm_encrypt(key, nonce, plaintext, associated_data):
     aesgcm = AESGCM(key)
-    cipher_text = aesgcm.encrypt(nonce, plain_text, associated_data)
-    return cipher_text
+    ciphertext_with_tag = aesgcm.encrypt(nonce, plaintext, associated_data)
+    return ciphertext_with_tag.hex()
 
-def aesgcm_decrypt(
-    key: bytes, nonce: bytes, cipher_text: bytes, associated_data: bytes,
-) -> bytes:
+def aesgcm_decrypt(key, nonce, ciphertext_with_tag, associated_data):
     aesgcm = AESGCM(key)
-    plain_text = aesgcm.decrypt(nonce, cipher_text, associated_data)
-    return plain_text
+    plaintext = aesgcm.decrypt(nonce, ciphertext_with_tag, associated_data)
+    return plaintext.hex()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='AES-GCM Encryption/Decryption')
@@ -32,7 +28,7 @@ if __name__ == "__main__":
 
     if args.action == 'encrypt':
         ciphertext = aesgcm_encrypt(key, nonce, text, associated_data)
-        print(ciphertext.hex())
+        print(ciphertext)
     else:
         plaintext = aesgcm_decrypt(key, nonce, text, associated_data)
-        print(plaintext.hex())
+        print(plaintext)
