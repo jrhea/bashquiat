@@ -22,7 +22,7 @@ rlp_encode_len() {
     
 }
 
-decode_length() {
+rlp_decode_length() {
     local input=$1
     local length=$(( (${#input}+1)/2 ))
     local result
@@ -32,14 +32,14 @@ decode_length() {
     fi
     prefix=$((16#${input:0:2}))
     if [ "$prefix" -le 127 ]; then #0x7f
-        result=(0 2 str)
+        result=(0 2 "item")
     elif [ "$prefix" -le 183 ]; then #0xb7
         strLen=$(((prefix-128)*2))
-        result=(2 "$strLen" str)
+        result=(2 "$strLen" "item")
     elif [ "$prefix" -le 191 ]; then
         lenOfStrLen=$(((prefix-183)*2))
         strLen=$((16#${input:2:$lenOfStrLen}*2)) # convert to base 10 and mult by 2
-        result=($((2+lenOfStrLen)) "$strLen" str)
+        result=($((2+lenOfStrLen)) "$strLen" "item")
     elif [ "$prefix" -le 247 ]; then
         listLen=$((2*(prefix-192)))
         result=(2 "$listLen" list)
@@ -51,19 +51,41 @@ decode_length() {
     printf "${result[*]}"
 }
 
-rlp_encode_str() {
+rlp_encode_item() {
     local input=$1
     local length=$2
-    if [ "$length" -eq 0 ]; then
-        printf "80"
-    elif [ "$length" -eq 1 ] && [ "$(char_to_int "$input")" -lt 128 ]; then
-        printf "$(char_to_hex "$input")"
+    # Check if input is a number
+    if [[ $input =~ ^[0-9]+$ ]]; then
+        local input_hex
+        if [ "$input" = "0" ]; then
+            printf "80"
+        elif [ "$input" -lt 128 ] 2>/dev/null; then
+            printf "%s" "$(int_to_hex "$input")"
+        else
+            # Handle large integers as strings
+            printf -v input_hex "%s" "$(printf "obase=16; %s\n" "$input" | bc)"
+            # Ensure even number of characters
+            [ $((${#input_hex} % 2)) -eq 1 ] && input_hex="0$input_hex"
+            # Convert to lowercase
+            input_hex=$(to_lower_hex "$input_hex")
+            length=$((${#input_hex} / 2))
+            printf "%s%s" "$(rlp_encode_len $length 80)" "$input_hex"
+        fi
+    # Otherwise input is a string
     else
-        printf "%s%s" "$(rlp_encode_len "$length" 80)" "$(str_to_hex "$input")"
+        if [ "$length" -eq 0 ]; then
+            printf "80"
+        elif [ "$length" -eq 1 ] && [ "$(char_to_int "$input")" -lt 128 ]; then
+            printf "$(char_to_hex "$input")"
+        else
+            printf "%s%s" "$(rlp_encode_len "$length" 80)" "$(str_to_hex "$input")"
+        fi
     fi
+
+
 }
 
-rlp_decode_str() {
+rlp_decode_item() {
     local input=$1
     local offset=$2
     local dataLen=$3
@@ -82,27 +104,6 @@ rlp_decode_str() {
         else
             printf "$value"
         fi
-    fi
-}
-
-rlp_encode_int() {
-    local input=$1
-    local input_hex
-    local length
-
-    if [ "$input" = "0" ]; then
-        printf "80"
-    elif [ "$input" -lt 128 ] 2>/dev/null; then
-        printf "%s" "$(int_to_hex "$input")"
-    else
-        # Handle large integers as strings
-        printf -v input_hex "%s" "$(printf "obase=16; %s\n" "$input" | bc)"
-        # Ensure even number of characters
-        [ $((${#input_hex} % 2)) -eq 1 ] && input_hex="0$input_hex"
-        # Convert to lowercase
-        input_hex=$(to_lower_hex "$input_hex")
-        length=$((${#input_hex} / 2))
-        printf "%s%s" "$(rlp_encode_len $length 80)" "$input_hex"
     fi
 }
 
@@ -141,16 +142,16 @@ rlp_decode_list() {
 
     while [ -n "$input" ]; do
         local offset dataLen type
-        read -r offset dataLen type <<< "$(decode_length "$input")"
+        read -r offset dataLen type <<< "$(rlp_decode_length "$input")"
 
-        if [ "$type" = "str" ]; then
+        if [ "$type" = "item" ]; then
             local item="${input:$offset:$dataLen}"
             if [ "$first" = true ]; then
                 first=false
             else
                 result+=","
             fi
-            result+="$(rlp_decode_str "$item" 0 "$((dataLen/2))")"
+            result+="$(rlp_decode_item "$item" 0 "$((dataLen/2))")"
         elif [ "$type" = "list" ]; then
             local sublist="${input:$offset:$dataLen}"
             if [ "$first" = true ]; then
@@ -174,10 +175,8 @@ rlp_encode() {
     if [ "${input:0:1}" == "[" ] && [ "${input:$((length-1)):1}" == "]" ]; then
         # remove outer brackets
         rlp_encode_list "${input:1:$((length-2))}"
-    elif [[ $input =~ ^[0-9]+$ ]]; then
-        rlp_encode_int "$input"
     else
-        rlp_encode_str "$input" "$length"
+        rlp_encode_item "$input" "$length"
     fi
 }
 
@@ -189,11 +188,11 @@ rlp_decode() {
     local output=""
     local offset dataLen type
     
-    read -r offset dataLen type <<< "$(decode_length "${input}")"
+    read -r offset dataLen type <<< "$(rlp_decode_length "${input}")"
 
-    if [ "$type" = "str" ]; then
+    if [ "$type" = "item" ]; then
         output="${input:$offset:$dataLen}"
-        printf '%s' "$(rlp_decode_str "$output" "$offset" "$((dataLen/2))")"
+        printf '%s' "$(rlp_decode_item "$output" "$offset" "$((dataLen/2))")"
     elif [ "$type" = "list" ]; then
         output="${input:$offset:$dataLen}"
         printf '%s' "$(rlp_decode_list "$output")"
