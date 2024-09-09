@@ -2,8 +2,9 @@
 
 # Get the directory of the script
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
 # Source utility functions from utils.sh
-source $DIR/../rlp/utils.sh
+source $DIR/utils.sh
 
 # Function to encode the length in RLP format
 rlp_encode_len() {
