@@ -42,7 +42,7 @@ test_pong_message() {
     local dest_node_id=$(generate_random_bytes 32 | bin_to_hex)
     local nonce=$(generate_random_bytes 12 | bin_to_hex)
     local read_key=$(generate_random_bytes 16 | bin_to_hex)
-    local req_id=$((RANDOM % 256))
+    local req_id=$(generate_random_bytes 2 | bin_to_hex)
     local enr_seq=$((RANDOM % 65536))
     local ip="$(( RANDOM % 256 )).$(( RANDOM % 256 )).$(( RANDOM % 256 )).$(( RANDOM % 256 ))"
     local port=$((RANDOM % 65536))
