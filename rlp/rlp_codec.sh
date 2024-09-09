@@ -125,12 +125,15 @@ rlp_encode_list() {
         fi
     done
 
+    # Add items to array
     IFS='|' read -r -a items <<< "$input"
     for item in "${items[@]}"; do
         array+=("$(rlp_encode "$item")")
     done
+
     # flatten array into result
-    printf -v result '%s' "${array[@]}" # TODO: not a fan of using the extra variable here
+    printf -v result '%s' "${array[@]}"
+
     # $(( (${#result}+1)/2 )) count bytes
     printf "$(rlp_encode_len $(( (${#result}+1)/2 )) c0)${result[*]}" 
 }
@@ -143,7 +146,6 @@ rlp_decode_list() {
     while [ -n "$input" ]; do
         local offset dataLen type
         read -r offset dataLen type <<< "$(rlp_decode_length "$input")"
-
         if [ "$type" = "item" ]; then
             local item="${input:$offset:$dataLen}"
             if [ "$first" = true ]; then
@@ -172,9 +174,10 @@ rlp_decode_list() {
 rlp_encode() {
     local input=$1
     local length=${#input}
+
+    # Check if input is a list
     if [ "${input:0:1}" == "[" ] && [ "${input:$((length-1)):1}" == "]" ]; then
-        # remove outer brackets
-        rlp_encode_list "${input:1:$((length-2))}"
+        rlp_encode_list "${input:1:$((length-2))}" # remove outer brackets
     else
         rlp_encode_item "$input" "$length"
     fi
@@ -182,14 +185,8 @@ rlp_encode() {
 
 rlp_decode() {
     local input=$1
-    if [ "${#input}" -eq 0 ]; then
-        return
-    fi
-    local output=""
-    local offset dataLen type
-    
+    local output offset dataLen type
     read -r offset dataLen type <<< "$(rlp_decode_length "${input}")"
-
     if [ "$type" = "item" ]; then
         output="${input:$offset:$dataLen}"
         printf '%s' "$(rlp_decode_item "$output" "$offset" "$((dataLen/2))")"
