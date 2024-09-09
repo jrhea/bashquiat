@@ -1,40 +1,47 @@
 #!/bin/bash
 
+# Convert lowercase hex to uppercase
 to_upper_hex() {
     printf '%s' "$1" | sed 'y/abcdef/ABCDEF/'
 }
 
+# Convert uppercase hex to lowercase
 to_lower_hex() {
     printf '%s' "$1" | sed 'y/ABCDEF/abcdef/'
 }
 
+# Remove leading zeros from a hex string, keeping at least one digit
 remove_leading_zeros() {
     local hex="$1"
-    # Remove leading zeros, but keep at least one digit
     while [[ "${hex:0:1}" == "0" && ${#hex} -gt 1 ]]; do
         hex="${hex:1}"
     done
     printf '%s' "$hex"
 }
 
+# Convert a single character to its hex representation
 char_to_hex() {
     printf  "%02x" "'${1}"
 }
 
+# Convert a two-digit hex value to its ASCII character
 hex_to_char() {
     printf "\x${1}"
 }
 
+# Convert a single character to its ASCII value
 char_to_int() {
     printf  "%d" "'${1}"
 }
 
+# Convert a string to its hex representation
 str_to_hex() {
     for ((i=0;i<${#1};i++));do 
         printf "$(char_to_hex "${1:$i:1}")";
     done
 }
 
+# Convert a hex string to its ASCII string representation
 hex_to_str() {
     local hex="$1"
     local str=""
@@ -47,13 +54,14 @@ hex_to_str() {
     printf "%s" "$str"
 }
 
-# doesn't pad with 0s
+# Convert an integer to its binary representation (doesn't pad with 0s)
 int_to_bin() {
     local n bit
     for (( n=$1 ; n>0 ; n >>= 1 )); do  bit="$(( n&1 ))$bit"; done
     printf "%s" "$bit" 
 }
 
+# Convert an integer to its hex representation, ensuring even number of digits
 int_to_hex() {
     printf -v num "%x" "$1"
     if [ "$(( (${#num}+1)/2 ))" -eq "$(( (${#num})/2 ))" ]; then
@@ -63,10 +71,12 @@ int_to_hex() {
     fi
 }
 
+# Convert a hex string to its integer value
 hex_to_int() {
     printf "%d" "$((16#$1))"
 }
 
+# Convert a large hex string to its decimal representation using bc
 hex_to_big_int() {
     local hex=$1
     local dec
@@ -89,6 +99,7 @@ hex_to_big_int() {
     printf '%s' "$dec"
 }
 
+# Check if a hex string represents non-printable ASCII characters
 not_printable() {
     local hex="$1"
     local len=${#hex}
