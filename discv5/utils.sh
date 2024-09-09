@@ -23,6 +23,47 @@ bin_to_hex() {
     fi
 }
 
+ensure_hex() {
+    local input="$1"
+    local byte_length="$2"
+    local hex_length=$((byte_length * 2))
+
+    # If input is already valid hex of correct length, return it
+    if [[ $input =~ ^[0-9A-Fa-f]{$hex_length}$ ]]; then
+        printf "%s" "$input"
+        return 0
+    fi
+
+    # If input is a number, convert to hex
+    if [[ $input =~ ^[0-9]+$ ]]; then
+        printf "%0${hex_length}x" "$input"
+        return 0
+    fi
+
+    # If input is a string, convert each character to hex
+    if [[ $input =~ ^[a-zA-Z0-9]+$ ]]; then
+        local hex=""
+        for (( i=0; i<${#input}; i++ )); do
+            hex+=$(printf "%02x" "'${input:$i:1}")
+        done
+        printf "%s" "${hex:0:$hex_length}"
+        return 0
+    fi
+
+    # If we get here, input couldn't be converted
+    return 1
+}
+
+ipv4_to_hex() {
+    local ip="$1"
+    local hex=""
+    IFS='.' read -r -a octets <<< "$ip"
+    for octet in "${octets[@]}"; do
+        hex+=$(printf "%02x" "$octet")
+    done
+    echo "$hex"
+}
+
 # Function to generate random bytes (hexadecimal string)
 generate_random_bytes() {
     local length=$1
