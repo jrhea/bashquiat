@@ -4,17 +4,15 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 source $DIR/utils.sh
 source $DIR/../rlp/rlp_codec.sh
 
-# static-header = protocol-id || version || flag || nonce || authdata-size
-# protocol-id   = "discv5"
-# version       = 0x0001
-# authdata-size = uint16    -- byte length of authdata
-# flag          = uint8     -- packet type identifier
-# nonce         = uint96    -- nonce of message
-encode_static_header() {
+# Function to encode header
+encode_masked_header() {
     local version="$1"
     local flag="$2"
     local nonce="$3"
     local authdata_size="$4"
+    local authdata="$5"
+    local masking_key="$6"
+    local masking_iv="$7"
 
     # Ensure each component is the correct length
     protocol_id=$(printf "discv5" | bin_to_hex)
@@ -23,8 +21,42 @@ encode_static_header() {
     nonce=$(printf '%024s' "$nonce")
     authdata_size=$(printf '%04s' "$authdata_size")
 
-    # Combine all components
-    printf "${protocol_id}${version}${flag}${nonce}${authdata_size}"
+    # Build static header
+    # static-header = protocol-id || version || flag || nonce || authdata-size
+    # protocol-id   = "discv5"
+    # version       = 0x0001
+    # authdata-size = uint16    -- byte length of authdata
+    # flag          = uint8     -- packet type identifier
+    # nonce         = uint96    -- nonce of message
+    local static_header="${protocol_id}${version}${flag}${nonce}${authdata_size}"
+    
+    # Combine static header and authdata for the full header
+    local header="${static_header}${authdata}"
+
+    # Encode masked header
+    local masked_header=$(printf '%s' "$header" | hex_to_bin | openssl enc -aes-128-ctr -K "$masking_key" -iv "$masking_iv" -nosalt | bin_to_hex)
+
+    # Return the header
+    printf '%s' "$masked_header"
+}
+
+# Function to decode the header of a message
+decode_masked_header() {
+    local packet="$1"
+    local dest_node_id="$2"
+
+    # Extract masking IV and masked header
+    local masking_iv=${packet:0:32}
+    local masked_header=${packet:32}
+
+    # Derive masking key (first 16 bytes of dest_node_id)
+    local masking_key=${dest_node_id:0:32}
+
+    # Decrypt header
+    local header=$(printf '%s' "$masked_header" | hex_to_bin | openssl enc -aes-128-ctr -d -K "$masking_key" -iv "$masking_iv" -nosalt | bin_to_hex)
+
+    # Return the decrypted header
+    printf '%s' "$header"
 }
 
 # Function to encode the PING message (flag = 0x02)
@@ -35,20 +67,6 @@ encode_ping_message() {
     local read_key="$4"
     local req_id="$5"
     local enr_seq="$6"
-
-    # Convert inputs to hex if they're not already
-    src_node_id=$(ensure_hex "$src_node_id" 32)
-    dest_node_id=$(ensure_hex "$dest_node_id" 32)
-    nonce=$(ensure_hex "$nonce" 12)
-    read_key=$(ensure_hex "$read_key" 16)
-    req_id=$(ensure_hex "$req_id" 1)
-    #enr_seq=$(ensure_hex "$enr_seq" 1)
-
-    # Check if any conversion failed
-    if [[ -z "$src_node_id" || -z "$dest_node_id" || -z "$nonce" || -z "$read_key" || -z "$req_id" || -z "$enr_seq" ]]; then
-        printf "Error: Failed to convert inputs to valid hex strings\n" >&2
-        return 1
-    fi
 
     # Ensure nonce and read_key are the correct length
     nonce=$(printf '%024s' "$nonce")
@@ -66,17 +84,10 @@ encode_ping_message() {
     
     # Fixed authdata size for ordinary messages (32 bytes for src-id)
     local authdata_size="0020"
-
-    # Encode static header
-    local static_header=$(encode_static_header "$version" "$flag" "$nonce" "$authdata_size")
-
-    # Combine static header and src_node_id for the full header
     local authdata=$src_node_id  # SRC Node ID is 32 bytes (64 characters)
-    local header="${static_header}${authdata}"
-    
 
     # Encode masked header
-    local masked_header=$(printf '%s' "$header" | hex_to_bin | openssl enc -aes-128-ctr -K "${dest_node_id:0:32}" -iv "$masking_iv" -nosalt | bin_to_hex)
+    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "${dest_node_id:0:32}" "$masking_iv")
 
     # Prepare the message content (PING RLP: [message_type, req_id, enr_seq])
     local message_type="01"  # 0x01 for PING
@@ -87,7 +98,7 @@ encode_ping_message() {
     local message_pt=$message_type$rlp_message_content
 
     # Prepare the message AD (associated data)
-    # message-ad    = masking-iv || header
+    # message-ad    = masking-iv || masked_header
     local message_ad=$masking_iv$masked_header
 
     # Encrypt the message content using AES-GCM
@@ -108,19 +119,8 @@ decode_ping_message() {
     local dest_node_id="$2"
     local read_key="$3"
 
-    # Extract masking IV and masked header
-    local masking_iv=${packet:0:32}
-    local masked_header=${packet:32}
-
-    # Extract associated data and encrypted message
-    local message_ad=${packet:0:142}  # masking_iv + masked_header (32 + 110 = 142)
-    local encrypted_message=${packet:142}  # 28 bytes of ciphertext+tag (12 + 16 = 28)
-
-    # Derive masking key (first 16 bytes of dest_node_id)
-    local masking_key=${dest_node_id:0:32}
-
-    # Decrypt header
-    local header=$(printf '%s' "$masked_header" | hex_to_bin | openssl enc -aes-128-ctr -d -K "$masking_key" -iv "$masking_iv" -nosalt | bin_to_hex)
+    # Decode the header
+    local header=$(decode_masked_header "$packet" "$dest_node_id")
 
     # Extract header components
     local protocol_id=${header:0:12}
@@ -141,6 +141,12 @@ decode_ping_message() {
         printf "Invalid flag: expected 00, got %s\n" "$flag"
         return 1
     fi
+
+    # Extract associated data and encrypted message
+    local message_ad=${packet:0:142}  # masking_iv + masked_header (32 + 110 = 142)
+    local encrypted_message=${packet:142}  # 28 bytes of ciphertext+tag (12 + 16 = 28)
+
+    # Decrypt the message content
     local decrypted_message=$(python discv5/aes_gcm.py decrypt "$read_key" "$nonce" "$encrypted_message" "$message_ad")
 
     # Extract message type and content
@@ -154,7 +160,7 @@ decode_ping_message() {
     fi
 
     # Parse RLP-encoded content
-    decoded_rlp_message_content=$(rlp_decode "$message_content")
+    local decoded_rlp_message_content=$(rlp_decode "$message_content")
     IFS=',' read -ra array <<< "${decoded_rlp_message_content//[\[\]\"]/}"
     local req_id=${array[0]}
     local enr_seq=${array[1]}
@@ -180,21 +186,6 @@ encode_pong_message() {
     local ip="$7"
     local port="$8"
 
-    # Convert inputs to hex if they're not already
-    src_node_id=$(ensure_hex "$src_node_id" 32)
-    dest_node_id=$(ensure_hex "$dest_node_id" 32)
-    nonce=$(ensure_hex "$nonce" 12)
-    read_key=$(ensure_hex "$read_key" 16)
-    req_id=$(ensure_hex "$req_id" 1)
-    enr_seq=$(ensure_hex "$enr_seq" 8)
-
-    # Check if any conversion failed
-    if [[ -z "$src_node_id" || -z "$dest_node_id" || -z "$nonce" || -z "$read_key" || 
-          -z "$req_id" || -z "$enr_seq" || -z "$ip" || -z "$port" ]]; then
-        printf "Error: Failed to convert inputs to valid hex strings\n" >&2
-        return 1
-    fi
-
     # Use read_key as masking IV
     local masking_iv=$read_key
 
@@ -206,16 +197,10 @@ encode_pong_message() {
     
     # Fixed authdata size for ordinary messages (32 bytes for src-id)
     local authdata_size="0020"
-
-    # Encode static header
-    local static_header=$(encode_static_header "$version" "$flag" "$nonce" "$authdata_size")
-
-    # Combine static header and src_node_id for the full header
     local authdata=$src_node_id
-    local header="${static_header}${authdata}"
 
     # Encode masked header
-    local masked_header=$(printf '%s' "$header" | hex_to_bin | openssl enc -aes-128-ctr -K "${dest_node_id:0:32}" -iv "$masking_iv" -nosalt | bin_to_hex)
+    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "${dest_node_id:0:32}" "$masking_iv")
 
     # Prepare the message content (PONG RLP: [req_id, enr_seq, ip, port])
     local message_type="02"  # 0x02 for PONG
@@ -242,19 +227,8 @@ decode_pong_message() {
     local dest_node_id="$2"
     local read_key="$3"
 
-    # Extract masking IV and masked header
-    local masking_iv=${packet:0:32}
-    local masked_header=${packet:32}
-
-    # Extract associated data and encrypted message
-    local message_ad=${packet:0:142}  # masking_iv + masked_header
-    local encrypted_message=${packet:142}
-
-    # Derive masking key (first 16 bytes of dest_node_id)
-    local masking_key=${dest_node_id:0:32}
-
-    # Decrypt header
-    local header=$(printf '%s' "$masked_header" | hex_to_bin | openssl enc -aes-128-ctr -d -K "$masking_key" -iv "$masking_iv" -nosalt | bin_to_hex)
+    # Decode the header
+    local header=$(decode_masked_header "$packet" "$dest_node_id")
 
     # Extract header components
     local protocol_id=${header:0:12}
@@ -270,11 +244,15 @@ decode_pong_message() {
         return 1
     fi
 
-    # Verify flag (should be 09 for ordinary messages)
+    # Verify flag (should be 00 for ordinary messages)
     if [ "$flag" != "00" ]; then
         printf "Invalid flag: expected 00, got %s\n" "$flag" >&2
         return 1
     fi
+
+    # Extract associated data and encrypted message
+    local message_ad=${packet:0:142}  # masking_iv + masked_header (32 + 110 = 142)
+    local encrypted_message=${packet:142}  # 28 bytes of ciphertext+tag (12 + 16 = 28)
 
     # Decrypt the message content
     local decrypted_message=$(python discv5/aes_gcm.py decrypt "$read_key" "$nonce" "$encrypted_message" "$message_ad")
@@ -318,12 +296,6 @@ encode_whoareyou_message() {
     local enr_seq="$4"
     local masking_iv="$5"
 
-    # Convert inputs to hex if they're not already
-    dest_node_id=$(ensure_hex "$dest_node_id" 32)
-    nonce=$(ensure_hex "$nonce" 12)
-    id_nonce=$(ensure_hex "$id_nonce" 16) # 16 bytes for ID nonce
-    enr_seq=$(ensure_hex "$enr_seq" 8)  # 8 bytes for ENR sequence number
-
     # Check if any conversion failed
     if [[ -z "$dest_node_id" || -z "$nonce" || -z "$id_nonce" || -z "$enr_seq" ]]; then
         printf "Error: Failed to convert inputs to valid hex strings\n" >&2
@@ -344,15 +316,11 @@ encode_whoareyou_message() {
     # Fixed authdata size for WHOAREYOU = 24
     local authdata_size="0018"
 
-    # Build the header
-    local static_header=$(encode_static_header "$version" "$flag" "$nonce" "$authdata_size")
-    local header="${static_header}${id_nonce}${enr_seq}"
+    # Combine id_nonce and enr_seq to create authdata
+    local authdata="${id_nonce}${enr_seq}"
 
-    # Derive masking key (first 16 bytes of dest_node_id)
-    local masking_key="${dest_node_id:0:32}"
-
-    # Encrypt header
-    local masked_header=$(printf '%s' "$header" | hex_to_bin | openssl enc -aes-128-ctr -K "$masking_key" -iv "$masking_iv" -nosalt | bin_to_hex)
+    # Encode masked header
+    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "${dest_node_id:0:32}" "$masking_iv")
 
     # Combine masking IV and masked header
     printf '%s%s' "$masking_iv" "$masked_header"
@@ -363,15 +331,8 @@ decode_whoareyou_message() {
     local packet=$1
     local dest_id=$2
 
-    # Extract masking IV and masked header
-    local masking_iv=${packet:0:32}
-    local masked_header=${packet:32}
-
-    # Derive masking key (first 16 bytes of dest_id)
-    local masking_key=${dest_id:0:32}
-
-    # Decrypt header
-    local header=$(echo -n "$masked_header" | hex_to_bin | openssl enc -aes-128-ctr -d -K "$masking_key" -iv "$masking_iv" -nosalt | bin_to_hex)
+    # Decode the header
+    local header=$(decode_masked_header "$packet" "$dest_node_id" "$read_key")
 
     # Extract header components
     local protocol_id=${header:0:12}

@@ -8,8 +8,8 @@ test_ping_message() {
     local dest_node_id=$(generate_random_bytes 32 | bin_to_hex)
     local nonce=$(generate_random_bytes 12 | bin_to_hex)
     local read_key=$(generate_random_bytes 16 | bin_to_hex)
-    local req_id=$(printf "%02x" $((RANDOM % 256)))
-    local enr_seq=$(printf "%02x" $((RANDOM % 256)))
+    local req_id=$(generate_random_bytes 2 | bin_to_hex)
+    local enr_seq=$(generate_random_bytes 8 | bin_to_hex)
 
     echo "Encoding PING message..."
     local encoded_message=$(encode_ping_message "$src_node_id" "$dest_node_id" "$nonce" "$read_key" "$req_id" "$enr_seq")
@@ -43,7 +43,7 @@ test_pong_message() {
     local nonce=$(generate_random_bytes 12 | bin_to_hex)
     local read_key=$(generate_random_bytes 16 | bin_to_hex)
     local req_id=$(generate_random_bytes 2 | bin_to_hex)
-    local enr_seq=$((RANDOM % 65536))
+    local enr_seq=$(generate_random_bytes 8 | bin_to_hex)
     local ip="$(( RANDOM % 256 )).$(( RANDOM % 256 )).$(( RANDOM % 256 )).$(( RANDOM % 256 ))"
     local port=$((RANDOM % 65536))
 
@@ -60,8 +60,8 @@ test_pong_message() {
     local decoded_port=$(echo "$decoded_output" | grep "Port:" | awk '{print $2}')
 
     # Convert original values to match decoded format
-    local original_req_id=$(printf "%02x" $req_id)
-    local original_enr_seq=$(printf "%016x" $enr_seq)
+    local original_req_id=$req_id
+    local original_enr_seq=$enr_seq
     local original_port=$port
 
     # Compare values
@@ -108,7 +108,7 @@ test_whoareyou_message() {
     local dest_node_id=$(generate_random_bytes 32 | bin_to_hex)
     local nonce=$(generate_random_bytes 12 | bin_to_hex)
     local id_nonce=$(generate_random_bytes 16 | bin_to_hex)
-    local enr_seq=$(printf "%016x" $((RANDOM % 65536)))
+    local enr_seq=$(generate_random_bytes 8 | bin_to_hex)
     local masking_iv=$(generate_random_bytes 16 | bin_to_hex)
 
     echo "Encoding WHOAREYOU message..."
