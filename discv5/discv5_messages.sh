@@ -114,7 +114,7 @@ decode_ping_message() {
 
     # Extract associated data and encrypted message
     local message_ad=${packet:0:142}  # masking_iv + masked_header (32 + 110 = 142)
-    local encrypted_message=${packet:142:56}  # 28 bytes of ciphertext+tag (12 + 16 = 28)
+    local encrypted_message=${packet:142}  # 28 bytes of ciphertext+tag (12 + 16 = 28)
 
     # Derive masking key (first 16 bytes of dest_node_id)
     local masking_key=${dest_node_id:0:32}
