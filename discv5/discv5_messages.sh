@@ -59,39 +59,13 @@ decode_masked_header() {
     printf '%s' "$header"
 }
 
-# Function to encode the PING message (flag = 0x02)
-encode_ping_message() {
-    local src_node_id="$1"
-    local dest_node_id="$2"
-    local nonce="$3"
-    local read_key="$4"
-    local req_id="$5"
-    local enr_seq="$6"
-
-    # Ensure nonce and read_key are the correct length
-    nonce=$(printf '%024s' "$nonce")
-    read_key=$(printf '%032s' "$read_key")
-
-    # Use read_key as masking IV
-    local masking_iv=$read_key
-    #local masking_iv=$(generate_random_bytes 32)
-
-    # Protocol Version
-    local version="0001"
-
-    # PING message flag
-    local flag="00"
-    
-    # Fixed authdata size for ordinary messages (32 bytes for src-id)
-    local authdata_size="0020"
-    local authdata=$src_node_id  # SRC Node ID is 32 bytes (64 characters)
-
-    # Encode masked header
-    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "${dest_node_id:0:32}" "$masking_iv")
-
-    # Prepare the message content (PING RLP: [message_type, req_id, enr_seq])
-    local message_type="01"  # 0x01 for PING
-    local rlp_message_content=$(rlp_encode "[\"$req_id\",\"$enr_seq\"]")
+encrypt_message_data() {
+    local message_type="$1"
+    local rlp_message_content="$2"
+    local masking_iv="$3"
+    local masked_header="$4"
+    local read_key="$5"
+    local nonce="$6"
 
     # Combine message type and RLP-encoded content
     # message-pt    = message-type || message-data
@@ -107,10 +81,74 @@ encode_ping_message() {
     #local encrypted_message=$(printf '%s' "$message_pt" | hex_to_bin | /usr/local/libressl/bin/openssl enc -aes-128-gcm -K "$read_key" -iv "$nonce" | bin_to_hex)
 
     # Combine all parts
-    local final_message="${message_ad}${encrypted_message}"
+    local message_data="${message_ad}${encrypted_message}"
 
-    # Return only the final message
-    printf '%s' "$final_message"
+    # Return the final message
+    printf '%s' "$message_data"
+}
+
+decrypt_message_data() {
+    local packet="$1"
+    local read_key="$2"
+    local nonce="$3"
+    local encrypted_message="$4"
+    local message_ad="$5"
+
+    # Extract associated data and encrypted message
+    local message_ad=${packet:0:142}  # masking_iv + masked_header (32 + 110 = 142)
+    local encrypted_message=${packet:142}  # 28 bytes of ciphertext+tag (12 + 16 = 28)
+
+    # Decrypt the message content
+    local decrypted_message=$(python discv5/aes_gcm.py decrypt "$read_key" "$nonce" "$encrypted_message" "$message_ad")
+
+    # Extract message type and content
+    local message_type=${decrypted_message:0:2}
+    local message_content=${decrypted_message:2}
+
+    # Return the decrypted message type and message contents
+    printf '%s %s' "$message_type" "$message_content"
+}
+
+
+# Function to encode the PING message (flag = 0x02)
+encode_ping_message() {
+    local src_node_id="$1"
+    local dest_node_id="$2"
+    local nonce="$3"
+    local read_key="$4"
+    local req_id="$5"
+    local enr_seq="$6"
+
+    # Ensure nonce and read_key are the correct length
+    nonce=$(printf '%024s' "$nonce")
+    read_key=$(printf '%032s' "$read_key")
+
+    # Use read_key as masking IV
+    local masking_iv=$read_key
+
+    # Protocol Version
+    local version="0001"
+
+    # PING message flag
+    local flag="00"
+    
+    # Fixed authdata size for ordinary messages (32 bytes for src-id)
+    local authdata_size="0020"
+    local authdata=$src_node_id  # SRC Node ID is 32 bytes (64 characters)
+
+    # Encode masked header
+    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "${dest_node_id:0:32}" "$masking_iv")
+
+    # 0x01 for PING message
+    local message_type="01" 
+
+    # Prepare the message content (PING RLP: [message_type, req_id, enr_seq])
+    local rlp_message_content=$(rlp_encode "[\"$req_id\",\"$enr_seq\"]") 
+
+    local message_data=$(encrypt_message_data $message_type $rlp_message_content $masking_iv $masked_header $read_key $nonce)
+
+    # Return message data
+    printf '%s' "$message_data"
 }
 
 # Function to decode the PING message
@@ -142,16 +180,8 @@ decode_ping_message() {
         return 1
     fi
 
-    # Extract associated data and encrypted message
-    local message_ad=${packet:0:142}  # masking_iv + masked_header (32 + 110 = 142)
-    local encrypted_message=${packet:142}  # 28 bytes of ciphertext+tag (12 + 16 = 28)
-
-    # Decrypt the message content
-    local decrypted_message=$(python discv5/aes_gcm.py decrypt "$read_key" "$nonce" "$encrypted_message" "$message_ad")
-
-    # Extract message type and content
-    local message_type=${decrypted_message:0:2}
-    local message_content=${decrypted_message:2}
+    # Extract message_type and message_content
+    read -r message_type message_content <<< $(decrypt_message_data "$packet" "$read_key" "$nonce" "$encrypted_message" "$message_ad")
 
     # Verify message type (should be 01 for PING)
     if [ "$message_type" != "01" ]; then
@@ -202,24 +232,16 @@ encode_pong_message() {
     # Encode masked header
     local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "${dest_node_id:0:32}" "$masking_iv")
 
-    # Prepare the message content (PONG RLP: [req_id, enr_seq, ip, port])
-    local message_type="02"  # 0x02 for PONG
+   # 0x02 for PONG message
+    local message_type="02" 
+
+    # Prepare the message content (PONG RLP: [message_type, req_id, enr_seq])
     local rlp_message_content=$(rlp_encode "[\"$req_id\",\"$enr_seq\",\"$ip\",\"$port\"]")
 
-    # Combine message type and RLP-encoded content
-    local message_pt=$message_type$rlp_message_content
+    local message_data=$(encrypt_message_data $message_type $rlp_message_content $masking_iv $masked_header $read_key $nonce)
 
-    # Prepare the message AD (associated data)
-    local message_ad=$masking_iv$masked_header
-
-    # Encrypt the message content using AES-GCM
-    local encrypted_message=$(python discv5/aes_gcm.py encrypt "$read_key" "$nonce" "$message_pt" "$message_ad")
-
-    # Combine all parts
-    local final_message="${message_ad}${encrypted_message}"
-
-    # Return the final message
-    printf '%s' "$final_message"
+    # Return message data
+    printf '%s' "$message_data"
 }
 
 decode_pong_message() {
@@ -250,16 +272,8 @@ decode_pong_message() {
         return 1
     fi
 
-    # Extract associated data and encrypted message
-    local message_ad=${packet:0:142}  # masking_iv + masked_header (32 + 110 = 142)
-    local encrypted_message=${packet:142}  # 28 bytes of ciphertext+tag (12 + 16 = 28)
-
-    # Decrypt the message content
-    local decrypted_message=$(python discv5/aes_gcm.py decrypt "$read_key" "$nonce" "$encrypted_message" "$message_ad")
-
-    # Extract message type and content
-    local message_type=${decrypted_message:0:2}
-    local message_content=${decrypted_message:2}
+    # Extract message_type and message_content
+    read -r message_type message_content <<< $(decrypt_message_data "$packet" "$read_key" "$nonce" "$encrypted_message" "$message_ad")
 
     # Verify message type (should be 02 for PONG)
     if [ "$message_type" != "02" ]; then
@@ -300,11 +314,6 @@ encode_whoareyou_message() {
     if [[ -z "$dest_node_id" || -z "$nonce" || -z "$id_nonce" || -z "$enr_seq" ]]; then
         printf "Error: Failed to convert inputs to valid hex strings\n" >&2
         return 1
-    fi
-
-    # Generate random masking IV if not provided
-    if [ -z "$masking_iv" ]; then
-        masking_iv=$(generate_random_bytes 32)
     fi
 
     # Protocol Version
