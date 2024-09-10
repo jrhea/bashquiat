@@ -367,3 +367,19 @@ decode_whoareyou_message() {
     printf "ID Nonce: %s\n" "$id_nonce"
     printf "ENR Seq: %s\n" "$enr_seq"
 }
+
+# Function to retrieve the message type from a packet
+get_message_type() {
+    local packet="$1"
+    local read_key="$2"
+    local nonce="$3"
+
+    # Decrypt the message type and message content
+    read -r message_type message_content <<< $(decrypt_message_data "$packet" "$read_key" "$nonce")
+
+    # Extract message type and content
+    local message_type=${decrypted_message:0:2}
+
+    # Return the decrypted message type
+    printf '%s' "$message_type"
+}
