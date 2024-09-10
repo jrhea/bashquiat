@@ -1,7 +1,7 @@
 #!/bin/bash
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-source $DIR/../discv5.sh
+source $DIR/../discv5_messages.sh
 
 test_ping_message() {
     local src_node_id=$(generate_random_bytes 32 | bin_to_hex)

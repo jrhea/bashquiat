@@ -110,7 +110,7 @@ decode_ping_message() {
 
     # Extract masking IV and masked header
     local masking_iv=${packet:0:32}
-    local masked_header=${packet:32:126}
+    local masked_header=${packet:32}
 
     # Extract associated data and encrypted message
     local message_ad=${packet:0:142}  # masking_iv + masked_header (32 + 110 = 142)
