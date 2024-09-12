@@ -196,14 +196,7 @@ decode_ping_message() {
     local enr_seq=${array[1]}
 
     # Output decoded components
-    printf "Protocol ID: %s\n" "$protocol_id"
-    printf "Version: %s\n" "$version"
-    printf "Flag: %s\n" "$flag"
-    printf "Nonce: %s\n" "$nonce"
-    printf "Authdata size: %s\n" "$authdata_size"
-    printf "Source Node ID: %s\n" "$src_node_id"
-    printf "Request ID: %s\n" "$req_id" 
-    printf "ENR Sequence Number: %s\n" "$enr_seq"
+    printf '%s %s %s %s %s %s %s %s %s %s' "$protocol_id" "$version" "$flag" "$nonce" "$authdata_size" "$src_node_id" "$req_id" "$enr_seq"
 }
 
 encode_pong_message() {
@@ -290,16 +283,7 @@ decode_pong_message() {
     local port=${array[3]}
 
     # Output decoded components
-    printf "Protocol ID: %s\n" "$protocol_id"
-    printf "Version: %s\n" "$version"
-    printf "Flag: %s\n" "$flag"
-    printf "Nonce: %s\n" "$nonce"
-    printf "Authdata size: %s\n" "$authdata_size"
-    printf "Source Node ID: %s\n" "$src_node_id"
-    printf "Request ID: %s\n" "$req_id"
-    printf "ENR Sequence Number: %s\n" "$enr_seq"
-    printf "IP Address: %s\n" "$ip"
-    printf "Port: %d\n" "$port"
+    printf '%s %s %s %s %s %s %s %s %s %s' "$protocol_id" "$version" "$flag" "$nonce" "$authdata_size" "$src_node_id" "$req_id" "$enr_seq" "$ip" "$port"
 }
 
 # Function to encode the WHOAREYOU message (flag = 0x01)
@@ -359,13 +343,7 @@ decode_whoareyou_message() {
     fi
 
     # Output decoded components
-    printf "Protocol ID: %s\n" "$protocol_id"
-    printf "Version: %s\n" "$version"
-    printf "Flag: %s\n" "$flag"
-    printf "Req Nonce: %s\n" "$nonce"
-    printf "Authdata size: %s\n" "$authdata_size"
-    printf "ID Nonce: %s\n" "$id_nonce"
-    printf "ENR Seq: %s\n" "$enr_seq"
+    printf '%s %s %s %s %s %s %s %s %s %s' "$protocol_id" "$version" "$flag" "$nonce" "$authdata_size" "$id_nonce" "$enr_seq"
 }
 
 # Function to retrieve the message type from a packet

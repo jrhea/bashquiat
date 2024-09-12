@@ -90,7 +90,15 @@ run_whoareyou_test() {
     fi
 
     printf 'Decoding the generated WHOAREYOU message:\n'
-    decode_whoareyou_message "$whoareyou_message" "$dest_node_id"
+    read -r decoded_protocol_id decoded_version decoded_flag decoded_nonce decoded_authdata_size decoded_id_nonce \
+            decoded_enr_seq <<< $(decode_whoareyou_message "$whoareyou_message" "$dest_node_id")
+    printf "Protocol ID: %s\n" "$decoded_protocol_id"
+    printf "Version: %s\n" "$decoded_version"
+    printf "Flag: %s\n" "$decoded_flag"
+    printf "Req Nonce: %s\n" "$decoded_nonce"
+    printf "Authdata size: %s\n" "$decoded_authdata_size"
+    printf "ID Nonce: %s\n" "$decoded_id_nonce"
+    printf "ENR Seq: %s\n" "$decoded_enr_seq"
 }
 
 run_ping_test() {
@@ -126,7 +134,16 @@ run_ping_test() {
     fi
 
     printf 'Decoding the generated PING message:\n'
-    decode_ping_message "$ping_message" "$dest_node_id" "$read_key"
+    read -r decoded_protocol_id decoded_version decoded_flag decoded_nonce decoded_authdata_size decoded_src_node_id decoded_req_id \
+            decoded_enr_seq <<< $(decode_ping_message "$ping_message" "$dest_node_id" "$read_key")
+    printf "Protocol ID: %s\n" "$decoded_protocol_id"
+    printf "Version: %s\n" "$decoded_version"
+    printf "Flag: %s\n" "$decoded_flag"
+    printf "Nonce: %s\n" "$decoded_nonce"
+    printf "Authdata size: %s\n" "$decoded_authdata_size"
+    printf "Source Node ID: %s\n" "$decoded_src_node_id"
+    printf "Request ID: %s\n" "$decoded_req_id" 
+    printf "ENR Sequence Number: %s\n" "$decoded_enr_seq"
 }
 
 run_tests_from_json() {

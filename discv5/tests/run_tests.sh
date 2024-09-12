@@ -15,12 +15,8 @@ test_ping_message() {
     local encoded_message=$(encode_ping_message "$src_node_id" "$dest_node_id" "$nonce" "$read_key" "$req_id" "$enr_seq")
     
     echo "Decoding PING message..."
-    local decoded_output=$(decode_ping_message "$encoded_message" "$dest_node_id" "$read_key")
-
-    echo "Checking decoded values..."
-    local decoded_src_node_id=$(echo "$decoded_output" | grep "Source Node ID:" | awk '{print $4}')
-    local decoded_req_id=$(echo "$decoded_output" | grep "Request ID:" | awk '{print $3}')
-    local decoded_enr_seq=$(echo "$decoded_output" | grep "ENR Sequence Number:" | awk '{print $4}')
+    read -r decoded_protocol_id decoded_version decoded_flag decoded_nonce decoded_authdata_size decoded_src_node_id decoded_req_id \
+            decoded_enr_seq <<< $(decode_ping_message "$encoded_message" "$dest_node_id" "$read_key")
 
     if [[ "$src_node_id" == "$decoded_src_node_id" && 
           "$req_id" == "$decoded_req_id" && 
@@ -49,20 +45,10 @@ test_pong_message() {
 
     echo "Encoding PONG message..."
     local encoded_message=$(encode_pong_message "$src_node_id" "$dest_node_id" "$nonce" "$read_key" "$req_id" "$enr_seq" "$ip" "$port")
+
     echo "Decoding PONG message..."
-    local decoded_output=$(decode_pong_message "$encoded_message" "$dest_node_id" "$read_key")
-
-    # Extract decoded values
-    local decoded_src_node_id=$(echo "$decoded_output" | grep "Source Node ID:" | awk '{print $4}')
-    local decoded_req_id=$(echo "$decoded_output" | grep "Request ID:" | awk '{print $3}')
-    local decoded_enr_seq=$(echo "$decoded_output" | grep "ENR Sequence Number:" | awk '{print $4}')
-    local decoded_ip=$(echo "$decoded_output" | grep "IP Address:" | awk '{print $3}')
-    local decoded_port=$(echo "$decoded_output" | grep "Port:" | awk '{print $2}')
-
-    # Convert original values to match decoded format
-    local original_req_id=$req_id
-    local original_enr_seq=$enr_seq
-    local original_port=$port
+    read -r decoded_protocol_id decoded_version decoded_flag decoded_nonce decoded_authdata_size decoded_src_node_id decoded_req_id \
+            decoded_enr_seq decoded_ip decoded_port <<< $(decode_pong_message "$encoded_message" "$dest_node_id" "$read_key")
 
     # Compare values
     local test_passed=true
@@ -72,15 +58,15 @@ test_pong_message() {
         echo "Decoded:  $decoded_src_node_id"
         test_passed=false
     fi
-    if [[ "$original_req_id" != "$decoded_req_id" ]]; then
+    if [[ "$req_id" != "$decoded_req_id" ]]; then
         echo "Request ID mismatch:"
-        echo "Original: $original_req_id"
+        echo "Original: $req_id"
         echo "Decoded:  $decoded_req_id"
         test_passed=false
     fi
-    if [[ "$original_enr_seq" != "$decoded_enr_seq" ]]; then
+    if [[ "$enr_seq" != "$decoded_enr_seq" ]]; then
         echo "ENR Sequence Number mismatch:"
-        echo "Original: $original_enr_seq"
+        echo "Original: $enr_seq"
         echo "Decoded:  $decoded_enr_seq"
         test_passed=false
     fi
@@ -90,9 +76,9 @@ test_pong_message() {
         echo "Decoded:  $decoded_ip"
         test_passed=false
     fi
-    if [[ "$original_port" != "$decoded_port" ]]; then
+    if [[ "$port" != "$decoded_port" ]]; then
         echo "Port mismatch:"
-        echo "Original: $original_port"
+        echo "Original: $port"
         echo "Decoded:  $decoded_port"
         test_passed=false
     fi
@@ -115,13 +101,10 @@ test_whoareyou_message() {
     local encoded_message=$(encode_whoareyou_message "$dest_node_id" "$nonce" "$id_nonce" "$enr_seq" "$masking_iv")
     
     echo "Decoding WHOAREYOU message..."
-    local decoded_output=$(decode_whoareyou_message "$encoded_message" "$dest_node_id")
+    read -r decoded_protocol_id decoded_version decoded_flag decoded_nonce decoded_authdata_size decoded_id_nonce \
+            decoded_enr_seq <<< $(decode_whoareyou_message "$encoded_message" "$dest_node_id")
 
-    echo "Checking decoded values..."
-    local decoded_nonce=$(echo "$decoded_output" | grep "Req Nonce:" | awk '{print $3}')
-    local decoded_id_nonce=$(echo "$decoded_output" | grep "ID Nonce:" | awk '{print $3}')
-    local decoded_enr_seq=$(echo "$decoded_output" | grep "ENR Seq:" | awk '{print $3}')
-
+    # Compare values
     if [[ "$nonce" == "$decoded_nonce" && 
           "$id_nonce" == "$decoded_id_nonce" && 
           "$enr_seq" == "$decoded_enr_seq" ]]; then
