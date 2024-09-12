@@ -3,9 +3,13 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 source $DIR/discv5_codec.sh
 
-# File paths for our queues
-INCOMING_QUEUE="/tmp/discv5_incoming_queue"
-OUTGOING_QUEUE="/tmp/discv5_outgoing_queue"
+# Create temporary files for our queues
+INCOMING_QUEUE=$(mktemp /tmp/discv5_incoming.XXXXXX)
+OUTGOING_QUEUE=$(mktemp /tmp/discv5_outgoing.XXXXXX)
+
+# Print the queue file names (for debugging purposes)
+printf "Incoming queue file: %s\n" "$INCOMING_QUEUE"
+printf "Outgoing queue file: %s\n" "$OUTGOING_QUEUE"
 
 # Ensure the queue files exist and are empty
 > "$INCOMING_QUEUE"
@@ -35,7 +39,7 @@ receive_udp() {
     while $keep_running; do
         message=$(timeout 1 nc -ul "$port")
         if [ -n "$message" ]; then
-            printf "Received: %s\n" "$message"
+            #printf "Received: %s\n" "$message"
             add_to_queue "$INCOMING_QUEUE" "$message"
         fi
     done
@@ -49,7 +53,7 @@ process_incoming_messages() {
             sed -i '1d' "$INCOMING_QUEUE"
             process_message "$message"
         fi
-        #sleep 0.1
+        sleep 0.1
     done
 }
 
@@ -57,18 +61,20 @@ process_incoming_messages() {
 process_message() {
     local message="$1"
 
-    local src_node_id=$(generate_random_bytes 32 | bin_to_hex)
-    local dest_node_id=$(generate_random_bytes 32 | bin_to_hex)
-    local nonce=$(generate_random_bytes 12 | bin_to_hex)
-    local read_key=$(generate_random_bytes 16 | bin_to_hex)
-    local req_id=$(generate_random_bytes 2 | bin_to_hex)
-    local enr_seq=$(generate_random_bytes 8 | bin_to_hex)
-    local ip="$(( RANDOM % 256 )).$(( RANDOM % 256 )).$(( RANDOM % 256 )).$(( RANDOM % 256 ))"
-    local port=$((RANDOM % 65536))
-    # Add your message processing logic here
-    # For example, if it's a PING, respond with a PONG
-    local pong_message=$(encode_pong_message "$src_node_id" "$dest_node_id" "$nonce" "$read_key" "$req_id" "$enr_seq")
-    add_to_queue "$OUTGOING_QUEUE" "$pong_message"
+    local message_type=$(get_message_type "$message" "$SRC_NODE_ID")
+    printf "Message Type: %s\n" "$message_type"
+    if [ "$message_type" == "PING" ]; then
+        local src_node_id=$SRC_NODE_ID
+        local dest_node_id=$DEST_NODE_ID
+        local nonce=$(generate_random_bytes 12 | bin_to_hex)
+        local read_key=$(generate_random_bytes 16 | bin_to_hex)
+        local req_id=$(generate_random_bytes 2 | bin_to_hex)
+        local enr_seq=$(generate_random_bytes 8 | bin_to_hex)
+        local ip="$(( RANDOM % 256 )).$(( RANDOM % 256 )).$(( RANDOM % 256 )).$(( RANDOM % 256 ))"
+        local port=$((RANDOM % 65536))
+        local pong_message=$(encode_pong_message "$src_node_id" "$dest_node_id" "$nonce" "$read_key" "$req_id" "$enr_seq")
+        add_to_queue "$OUTGOING_QUEUE" "$pong_message"
+    fi
 }
 
 # Function to process outgoing messages
@@ -78,9 +84,9 @@ process_outgoing_messages() {
             message=$(head -n 1 "$OUTGOING_QUEUE")
             sed -i '1d' "$OUTGOING_QUEUE"
             send_udp "$SEND_HOST" "$SEND_PORT" "$message"
-            printf "Sent message to %s:%s - %s\n" "$SEND_HOST" "$SEND_PORT" "$message"
+            #printf "Sent message to %s:%s - %s\n" "$SEND_HOST" "$SEND_PORT" "$message"
         fi
-        #sleep 0.1
+        sleep 0.1
     done
 }
 
@@ -96,7 +102,7 @@ send_next_message() {
     local host port message
     IFS=':' read -r host port message <<< "$next_message"
     send_udp "$host" "$port" "$message"
-    printf "Sent message to %s:%s - %s\n" "$host" "$port" "$message"
+    #printf "Sent message to %s:%s - %s\n" "$host" "$port" "$message"
 }
 
 # Function to clean up resources

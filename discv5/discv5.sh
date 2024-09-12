@@ -6,14 +6,16 @@ source $DIR/../discv5/udp_duplex.sh
 
 
 # Usage and argument parsing
-if [ $# -ne 3 ]; then
-    echo "Usage: $0 <listen_port> <send_host> <send_port>"
+if [ $# -ne 5 ]; then
+    echo "Usage: $0 <listen_port> <host> <send_port> <src_node_id> <dest_node_id>"
     exit 1
 fi
 
 export LISTEN_PORT=$1
 export SEND_HOST=$2
 export SEND_PORT=$3
+export SRC_NODE_ID=$4
+export DEST_NODE_ID=$5
 
 
 # Set up the trap for Ctrl+C (SIGINT)
@@ -35,19 +37,14 @@ printf "Script is running. Press Ctrl+C to stop.\n"
 
 # Main loop
 while $keep_running; do
-    (
     # Example usage: enqueue some DiscV5 messages
-    src_node_id=$(generate_random_bytes 32 | bin_to_hex)
-    dest_node_id=$(generate_random_bytes 32 | bin_to_hex)
     nonce=$(generate_random_bytes 12 | bin_to_hex)
     read_key=$(generate_random_bytes 16 | bin_to_hex)
     req_id=$(generate_random_bytes 2 | bin_to_hex)
     enr_seq=$(generate_random_bytes 8 | bin_to_hex)
-
-    ping_message=$(encode_ping_message "$src_node_id" "$dest_node_id" "$nonce" "$read_key" "$req_id" "$enr_seq")
+    ping_message=$(encode_ping_message "$SRC_NODE_ID" "$DEST_NODE_ID" "$nonce" "$read_key" "$req_id" "$enr_seq")
     add_to_queue "$OUTGOING_QUEUE" "$ping_message"
-    ) &
-    sleep 10
+    sleep 1
 done
 
 # The script will exit here when Ctrl+C is pressed and cleanup is done

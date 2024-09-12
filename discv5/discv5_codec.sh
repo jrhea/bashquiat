@@ -371,15 +371,32 @@ decode_whoareyou_message() {
 # Function to retrieve the message type from a packet
 get_message_type() {
     local packet="$1"
-    local read_key="$2"
-    local nonce="$3"
+    local dest_node_id="$2"
+    local read_key=${packet:0:32}
+
+    # Decode the header and extract the nonce
+    local header=$(decode_masked_header "$packet" "$dest_node_id")
+    local nonce=${header:18:24}
 
     # Decrypt the message type and message content
     read -r message_type message_content <<< $(decrypt_message_data "$packet" "$read_key" "$nonce")
 
     # Extract message type and content
-    local message_type=${decrypted_message:0:2}
+    local message_type_int=$((16#$message_type))
 
-    # Return the decrypted message type
-    printf '%s' "$message_type"
+    case "$message_type" in
+        "01") printf "PING" ;;
+        "02") printf "PONG" ;;
+        "03") printf "FINDNODE" ;;
+        "04") printf "NODES" ;;
+        "05") printf "TALKREQ" ;;
+        "06") printf "TALKRESP" ;;
+        "07") printf "REGTOPIC" ;;
+        "08") printf "TICKET" ;;
+        "09") printf "REGCONFIRMATION" ;;
+        "0a") printf "TOPICQUERY" ;;
+        *) printf "Unknown message type: $message_type" ;;
+    esac
 }
+
+
