@@ -91,17 +91,30 @@ decrypt_message_data() {
     local packet="$1"
     local read_key="$2"
     local nonce="$3"
-    local encrypted_message="$4"
-    local message_ad="$5"
+    local authdata_size="$4"
 
-    # Extract associated data and encrypted message
-    local message_ad=${packet:0:142}  # masking_iv + masked_header (32 + 110 = 142)
-    local encrypted_message=${packet:142}  # 28 bytes of ciphertext+tag (12 + 16 = 28)
+    # Convert authdata_size from hex to decimal
+    local authdata_size_dec=$((16#$authdata_size))
+
+    # Extract masking IV
+    local masking_iv=${packet:0:32}
+
+    # Calculate the length of the masked header
+    local header_length=$((46 + authdata_size_dec * 2))  # Multiply by 2 for hex chars
+
+    # Now proceed with the correct header length
+    local masked_header=${packet:32:$header_length}
+
+    # Combine masking IV and masked header to form the associated data
+    local message_ad="${masking_iv}${masked_header}"
+
+    # Extract the encrypted message (rest of the packet)
+    local encrypted_message=${packet:$((32 + header_length))}
 
     # Decrypt the message content
     local decrypted_message=$(python discv5/aes_gcm.py decrypt "$read_key" "$nonce" "$encrypted_message" "$message_ad")
 
-    # Extract message type and content
+    # Extract message_type and message_content
     local message_type=${decrypted_message:0:2}
     local message_content=${decrypted_message:2}
 
@@ -110,7 +123,7 @@ decrypt_message_data() {
 }
 
 
-# Function to encode the PING message (flag = 0x02)
+# Function to encode the PING message (flag = 0x00)
 encode_ping_message() {
     local src_node_id="$1"
     local dest_node_id="$2"
@@ -151,7 +164,7 @@ encode_ping_message() {
     printf '%s' "$message_data"
 }
 
-# Function to decode the PING message
+# Function to decode the PING message (flag = 0x00)
 decode_ping_message() {
     local packet="$1"
     local dest_node_id="$2"
@@ -181,7 +194,7 @@ decode_ping_message() {
     fi
 
     # Extract message_type and message_content
-    read -r message_type message_content <<< $(decrypt_message_data "$packet" "$read_key" "$nonce" "$encrypted_message" "$message_ad")
+    read -r message_type message_content <<< $(decrypt_message_data "$packet" "$read_key" "$nonce" "$authdata_size")
 
     # Verify message type (should be 01 for PING)
     if [ "$message_type" != "01" ]; then
@@ -199,6 +212,7 @@ decode_ping_message() {
     printf '%s %s %s %s %s %s %s %s %s %s' "$protocol_id" "$version" "$flag" "$nonce" "$authdata_size" "$src_node_id" "$req_id" "$enr_seq"
 }
 
+# Function to encode the PONG message (flag = 0x00)
 encode_pong_message() {
     local src_node_id="$1"
     local dest_node_id="$2"
@@ -237,6 +251,7 @@ encode_pong_message() {
     printf '%s' "$message_data"
 }
 
+# Function to decode the PONG message (flag = 0x00)
 decode_pong_message() {
     local packet="$1"
     local dest_node_id="$2"
@@ -266,7 +281,7 @@ decode_pong_message() {
     fi
 
     # Extract message_type and message_content
-    read -r message_type message_content <<< $(decrypt_message_data "$packet" "$read_key" "$nonce" "$encrypted_message" "$message_ad")
+    read -r message_type message_content <<< $(decrypt_message_data "$packet" "$read_key" "$nonce" "$authdata_size")
 
     # Verify message type (should be 02 for PONG)
     if [ "$message_type" != "02" ]; then
@@ -345,6 +360,160 @@ decode_whoareyou_message() {
     # Output decoded components
     printf '%s %s %s %s %s %s %s %s %s %s' "$protocol_id" "$version" "$flag" "$nonce" "$authdata_size" "$id_nonce" "$enr_seq"
 }
+
+# Function to encode the Handshake message (flag = 0x02)
+encode_handshake_message() {
+    local src_node_id="$1"
+    local dest_node_id="$2"
+    local nonce="$3"
+    local read_key="$4"
+    local challenge_data="$5"
+    local ephemeral_public_key="$6"
+    local ephemeral_private_key="$7"
+    local static_private_key="$8"
+    local record="$9"
+
+    # Validate inputs with detailed error messages
+    [ ${#src_node_id} -ne 64 ] && { printf "Error: src_node_id should be 64 characters, got %d\n" "${#src_node_id}" >&2; return 1; }
+    [ ${#dest_node_id} -ne 64 ] && { printf "Error: dest_node_id should be 64 characters, got %d\n" "${#dest_node_id}" >&2; return 1; }
+    [ ${#nonce} -ne 24 ] && { printf "Error: nonce should be 24 characters, got %d\n" "${#nonce}" >&2; return 1; }
+    [ ${#read_key} -ne 32 ] && { printf "Error: read_key should be 32 characters, got %d\n" "${#read_key}" >&2; return 1; }
+    [ ${#ephemeral_public_key} -ne 66 ] && { printf "Error: ephemeral_public_key should be 66 characters, got %d\n" "${#ephemeral_public_key}" >&2; return 1; }
+    [ ${#ephemeral_private_key} -ne 64 ] && { printf "Error: ephemeral_private_key should be 64 characters, got %d\n" "${#ephemeral_private_key}" >&2; return 1; }
+    [ ${#static_private_key} -ne 64 ] && { printf "Error: static_private_key should be 64 characters, got %d\n" "${#static_private_key}" >&2; return 1; }
+
+    # Create id-signature
+    local id_signature_text="discovery v5 identity proof"
+    local id_signature_input="${id_signature_text}${challenge_data}${ephemeral_public_key}${dest_node_id}"
+    local id_signature_hash=$(printf "%s" "$id_signature_input" | openssl dgst -sha256 -binary | xxd -p -c 32)
+    local id_signature=$(id_sign "$id_signature_hash" "$static_private_key")
+    local id_sign_result=$?
+    if [ $id_sign_result -ne 0 ] || [ ${#id_signature} -ne 128 ]; then
+        printf "Error: Failed to create id-signature, length: %d\n" "${#id_signature}" >&2
+        return 1
+    fi
+
+    # Protocol Version and flag
+    local version="0001"
+    local flag="02"
+
+    # Calculate sizes
+    local sig_size=$(( (${#id_signature} + 1) / 2 ))  # Ensure proper rounding
+    local eph_key_size=$(( (${#ephemeral_public_key} + 1) / 2 ))
+    local record_length=$(( (${#record} + 1) / 2 ))
+    
+    # Calculate authdata size
+    local authdata_size=$((34 + sig_size + eph_key_size + record_length))
+    local authdata_size_hex=$(printf '%04x' $authdata_size)
+
+    # Prepare authdata
+    local authdata_head="${src_node_id}$(printf '%02x' $sig_size)$(printf '%02x' $eph_key_size)"
+    local authdata="${authdata_head}${id_signature}${ephemeral_public_key}${record}"
+
+    # Generate random masking_iv (16 bytes)
+    local masking_iv=$read_key #$(openssl rand -hex 16)
+
+    # Encode masked header
+    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size_hex" "$authdata" "${dest_node_id:0:32}" "$masking_iv")
+
+    # Handshake messages don't have a separate message type, so we use dummy data
+    local message_type="00"
+    local rlp_message_content=$(rlp_encode "[]")
+
+    # Encrypt message data
+    local encrypt_message_data=$(encrypt_message_data $message_type $rlp_message_content $masking_iv $masked_header $read_key $nonce)
+
+    # Return complete handshake message
+    printf "%s" "$encrypt_message_data"
+}
+
+# Function to decode the Handshake message (flag = 0x02)
+decode_handshake_message() {
+    local packet="$1"
+    local dest_node_id="$2"
+    local read_key="$3"
+
+    # Decode the header
+    local header=$(decode_masked_header "$packet" "$dest_node_id")
+
+    # Extract header components
+    local protocol_id=${header:0:12}
+    local version=${header:12:4}
+    local flag=${header:16:2}
+    local nonce=${header:18:24}
+    local authdata_size=${header:42:4}
+
+    # Verify protocol ID
+    if [ "$protocol_id" != "646973637635" ]; then  # "discv5" in hex
+        printf "Invalid protocol ID\n" >&2
+        return 1
+    fi
+
+    # Total length of authdata in hex characters
+    local authdata_length=$(( 16#$authdata_size * 2 ))
+
+    # Extract authdata
+    local authdata=${header:46:$authdata_length}
+
+    # Parse authdata
+    local src_node_id=${authdata:0:64}
+    local sig_size_hex=${authdata:64:2}
+    local sig_size=$((16#$sig_size_hex))
+    local eph_key_size_hex=${authdata:66:2}
+    local eph_key_size=$((16#$eph_key_size_hex))
+
+    # Start positions and lengths
+    local id_signature_start=68
+    local id_signature_length=$((sig_size * 2))
+    local eph_pubkey_start=$((id_signature_start + id_signature_length))
+    local eph_pubkey_length=$((eph_key_size * 2))
+    local record_start=$((eph_pubkey_start + eph_pubkey_length))
+    local record_length=$((authdata_length - record_start))
+
+    # Extract components
+    local id_signature=${authdata:$id_signature_start:$id_signature_length}
+    local ephemeral_public_key=${authdata:$eph_pubkey_start:$eph_pubkey_length}
+    local record=${authdata:$record_start:$record_length}
+
+    # Decrypt the message content (which should be empty for handshake)
+    read -r message_type message_content <<< $(decrypt_message_data "$packet" "$read_key" "$nonce" "$authdata_size")
+
+    # Return the extracted values
+    printf '%s %s %s %s %s %s %s %s %s %s %s' \
+        "$protocol_id" "$version" "$flag" "$nonce" "$authdata_size" \
+        "$src_node_id" "$sig_size" "$eph_key_size" "$id_signature" \
+        "$ephemeral_public_key" "$record"
+}
+
+
+id_sign() {
+    local message="$1"
+    local private_key="$2"
+
+    # Ensure inputs are the correct length
+    if [ ${#message} -ne 64 ] || [ ${#private_key} -ne 64 ]; then
+        printf "Error: Invalid input lengths for id_sign (message: %d, private_key: %d)\n" "${#message}" "${#private_key}" >&2
+        return 1
+    fi
+
+    # Use the Python script to generate the signature
+    local signature=$(python discv5/ecdsa_sign.py "$message" "$private_key")
+    if [ $? -ne 0 ] || [ -z "$signature" ]; then
+        printf "Error: Failed to generate signature\n" >&2
+        return 1
+    fi
+
+    # Ensure the signature is the correct length (64 bytes in hex)
+    if [ ${#signature} -ne 128 ]; then
+        printf "Error: Signature has incorrect length: expected 128, got %d\n" "${#signature}" >&2
+        return 1
+    fi
+
+    # Return the signature
+    printf "%s" "$signature"
+}
+
+
 
 # Function to retrieve the message type from a packet
 get_message_type() {

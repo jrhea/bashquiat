@@ -23,6 +23,11 @@ bin_to_hex() {
     fi
 }
 
+# Convert a hex string to its integer value
+hex_to_int() {
+    printf "%d" "$((16#$1))"
+}
+
 ensure_hex() {
     local input="$1"
     local byte_length="$2"

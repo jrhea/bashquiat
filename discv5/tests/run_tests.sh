@@ -119,8 +119,76 @@ test_whoareyou_message() {
         echo "Decoded ENR Sequence Number: $decoded_enr_seq"
     fi
 }
+
+test_handshake_message() {
+    # Generate test data
+    local src_node_id=$(generate_random_bytes 32 | bin_to_hex)
+    local dest_node_id=$(generate_random_bytes 32 | bin_to_hex)
+    local nonce=$(generate_random_bytes 12 | bin_to_hex)
+    local read_key=$(generate_random_bytes 16 | bin_to_hex)
+    local challenge_data=$(generate_random_bytes 32 | bin_to_hex)
+
+    # Generate ephemeral key pair
+    local ephemeral_key=$(openssl ecparam -name secp256k1 -genkey -noout -outform DER | xxd -p -c 256)
+    local ephemeral_private_key=${ephemeral_key:14:64}
+    local ephemeral_public_key=$(openssl ec -inform DER -in <(printf "%s" "$ephemeral_key" | xxd -r -p) -pubout -outform DER -conv_form compressed 2>/dev/null | tail -c 33 | xxd -p -c 66)
+    
+    # Generate static private key
+    local static_key=$(openssl ecparam -name secp256k1 -genkey -noout -outform DER | xxd -p -c 256)
+    local static_private_key=${static_key:14:64}
+
+    local record=$(openssl rand -hex 100)  # Shortened for simplicity
+
+    printf "Encoding HANDSHAKE message...\n"
+    local encoded_message=$(encode_handshake_message "$src_node_id" "$dest_node_id" "$nonce" "$read_key" "$challenge_data" "$ephemeral_public_key" "$ephemeral_private_key" "$static_private_key" "$record")
+    
+    if [ $? -ne 0 ]; then
+        printf "Encoding failed. Exiting test.\n"
+        return 1
+    fi
+
+    printf "Decoding HANDSHAKE message...\n"
+    local decoded_message=$(decode_handshake_message "$encoded_message" "$dest_node_id" "$read_key")
+
+    # Parse decoded message
+    read -r decoded_protocol_id decoded_version decoded_flag decoded_nonce decoded_authdata_size \
+         decoded_src_node_id decoded_sig_size decoded_eph_key_size decoded_id_signature \
+         decoded_ephemeral_public_key decoded_record <<< "$decoded_message"
+
+    # Verify decoded values
+    local test_passed=true
+    if [[ "$src_node_id" != "$decoded_src_node_id" ]]; then
+        printf "Source Node ID mismatch:\n"
+        printf "Original: %s\n" "$src_node_id"
+        printf "Decoded:  %s\n" "$decoded_src_node_id"
+        test_passed=false
+    fi
+    if [[ "$record" != "$decoded_record" ]]; then
+        printf "Record mismatch:\n"
+        printf "Original: %s\n" "$record"
+        printf "Decoded:  %s\n" "$decoded_record"
+        test_passed=false
+    fi
+    if [[ $decoded_sig_size -ne 64 ]]; then
+        printf "Unexpected signature size: %d\n" "$decoded_sig_size"
+        test_passed=false
+    fi
+    if [[ $decoded_eph_key_size -ne 33 ]]; then
+        printf "Unexpected ephemeral public key size: %d\n" "$decoded_eph_key_size"
+        test_passed=false
+    fi
+
+    if $test_passed; then
+        printf "Test PASSED: All decoded values match the original values.\n"
+    else
+        printf "Test FAILED: Some decoded values do not match the original values.\n"
+    fi
+}
+
 test_ping_message
 printf "\n"
 test_pong_message
 printf "\n"
 test_whoareyou_message
+printf "\n"
+test_handshake_message
