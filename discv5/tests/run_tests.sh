@@ -3,6 +3,7 @@
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 source $DIR/../discv5_codec.sh
 
+# Test encoding and decoding of PING message
 test_ping_message() {
     local src_node_id=$(generate_random_bytes 32 | bin_to_hex)
     local dest_node_id=$(generate_random_bytes 32 | bin_to_hex)
@@ -33,6 +34,7 @@ test_ping_message() {
     fi
 }
 
+# Test encoding and decoding of PONG message
 test_pong_message() {
     local src_node_id=$(generate_random_bytes 32 | bin_to_hex)
     local dest_node_id=$(generate_random_bytes 32 | bin_to_hex)
@@ -90,6 +92,54 @@ test_pong_message() {
     fi
 }
 
+# Test encoding and decoding of FINDNODE message
+test_findnode_message() {
+    local src_node_id=$(generate_random_bytes 32 | bin_to_hex)
+    local dest_node_id=$(generate_random_bytes 32 | bin_to_hex)
+    local nonce=$(generate_random_bytes 12 | bin_to_hex)
+    local read_key=$(generate_random_bytes 16 | bin_to_hex)
+    local req_id=$(generate_random_bytes 2 | bin_to_hex)
+    local distance=$(generate_random_bytes 8 | bin_to_hex)
+
+    printf "Encoding FINDNODE message...\n"
+    local encoded_message=$(encode_findnode_message "$src_node_id" "$dest_node_id" "$nonce" "$read_key" "$req_id" "$distance")
+
+    printf "Decoding FINDNODE message...\n"
+    local decoded_message=$(decode_findnode_message "$encoded_message" "$dest_node_id" "$read_key")
+
+    # Parse decoded message
+    read -r decoded_protocol_id decoded_version decoded_flag decoded_nonce decoded_authdata_size \
+         decoded_src_node_id decoded_req_id decoded_distance <<< "$decoded_message"
+
+    # Verify decoded values
+    local test_passed=true
+    if [[ "$src_node_id" != "$decoded_src_node_id" ]]; then
+        printf "Source Node ID mismatch:\n"
+        printf "Original: %s\n" "$src_node_id"
+        printf "Decoded:  %s\n" "$decoded_src_node_id"
+        test_passed=false
+    fi
+    if [[ "$req_id" != "$decoded_req_id" ]]; then
+        printf "Request ID mismatch:\n"
+        printf "Original: %s\n" "$req_id"
+        printf "Decoded:  %s\n" "$decoded_req_id"
+        test_passed=false
+    fi
+    if [[ "$distance" != "$decoded_distance" ]]; then
+        printf "Distance mismatch:\n"
+        printf "Original: %s\n" "$distance"
+        printf "Decoded:  %s\n" "$decoded_distance"
+        test_passed=false
+    fi
+
+    if $test_passed; then
+        printf "Test PASSED: All decoded values match the original values.\n"
+    else
+        printf "Test FAILED: Some decoded values do not match the original values.\n"
+    fi
+}
+
+# Test encoding and decoding of WHOAREYOU message
 test_whoareyou_message() {
     local dest_node_id=$(generate_random_bytes 32 | bin_to_hex)
     local nonce=$(generate_random_bytes 12 | bin_to_hex)
@@ -120,6 +170,7 @@ test_whoareyou_message() {
     fi
 }
 
+# Test encoding and decoding of HANDSHAKE message
 test_handshake_message() {
     # Generate test data
     local src_node_id=$(generate_random_bytes 32 | bin_to_hex)
@@ -188,6 +239,8 @@ test_handshake_message() {
 test_ping_message
 printf "\n"
 test_pong_message
+printf "\n"
+test_findnode_message
 printf "\n"
 test_whoareyou_message
 printf "\n"
