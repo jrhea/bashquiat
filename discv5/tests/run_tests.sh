@@ -139,6 +139,71 @@ test_findnode_message() {
     fi
 }
 
+# Test encoding and decoding of NODES message
+test_nodes_message() {
+    local src_node_id=$(generate_random_bytes 32 | bin_to_hex)
+    local dest_node_id=$(generate_random_bytes 32 | bin_to_hex)
+    local nonce=$(generate_random_bytes 12 | bin_to_hex)
+    local read_key=$(generate_random_bytes 16 | bin_to_hex)
+    local req_id=$(generate_random_bytes 2 | bin_to_hex)
+    local total="1"
+    local enr1="enr:-IS4QOqa3tC28XcDez-0qS8s0mQ8R1sg3KMVn0yYhJiI7hD6eIl3Y6A6l4qZbi1nKoF7wC-1JbG7YQP6g8jgLA3P8EABh2F0dG5ldHOIAAAAAAAAAACEZXRoMpB5xkmC"
+    local enr2="enr:-IS4QOqa3tC28XcDez-0qS8s0mQ8R1sg3KMVn0yYhJiI7hD6eIl3Y6A6l4qZbi1nKoF7wC-1JbG7YQP6g8jgLA3P8EABh2F0dG5ldHOIAAAAAAAAAACEZXRoMpB5xkmD"
+
+    printf "Encoding NODES message...\n"
+    local encoded_message=$(encode_nodes_message "$src_node_id" "$dest_node_id" "$nonce" "$read_key" "$req_id" "$total" "$enr1" "$enr2")
+
+    printf "Decoding NODES message...\n"
+    local decoded_message=$(decode_nodes_message "$encoded_message" "$dest_node_id" "$read_key")
+
+    # Parse decoded message
+    # Read the first 8 components
+    read -r decoded_protocol_id decoded_version decoded_flag decoded_nonce decoded_authdata_size \
+         decoded_src_node_id decoded_req_id decoded_total <<< "$(echo "$decoded_message" | head -n1)"
+
+    # Read the ENRs
+    mapfile -t enrs <<< "$(echo "$decoded_message" | tail -n +2)"
+
+    # Verify decoded values
+    local test_passed=true
+    if [[ "$src_node_id" != "$decoded_src_node_id" ]]; then
+        printf "Source Node ID mismatch:\n"
+        printf "Original: %s\n" "$src_node_id"
+        printf "Decoded:  %s\n" "$decoded_src_node_id"
+        test_passed=false
+    fi
+    if [[ "$req_id" != "$decoded_req_id" ]]; then
+        printf "Request ID mismatch:\n"
+        printf "Original: %s\n" "$req_id"
+        printf "Decoded:  %s\n" "$decoded_req_id"
+        test_passed=false
+    fi
+    if [[ "$total" != "$decoded_total" ]]; then
+        printf "Total mismatch:\n"
+        printf "Original: %s\n" "$total"
+        printf "Decoded:  %s\n" "$decoded_total"
+        test_passed=false
+    fi
+    if [[ "${enrs[0]}" != "$enr1" ]]; then
+        printf "ENR1 mismatch:\n"
+        printf "Original: %s\n" "$enr1"
+        printf "Decoded:  %s\n" "${enrs[0]}"
+        test_passed=false
+    fi
+    if [[ "${enrs[1]}" != "$enr2" ]]; then
+        printf "ENR2 mismatch:\n"
+        printf "Original: %s\n" "$enr2"
+        printf "Decoded:  %s\n" "${enrs[1]}"
+        test_passed=false
+    fi
+
+    if $test_passed; then
+        printf "Test PASSED: All decoded values match the original values.\n"
+    else
+        printf "Test FAILED: Some decoded values do not match the original values.\n"
+    fi
+}
+
 # Test encoding and decoding of WHOAREYOU message
 test_whoareyou_message() {
     local dest_node_id=$(generate_random_bytes 32 | bin_to_hex)
@@ -241,6 +306,8 @@ printf "\n"
 test_pong_message
 printf "\n"
 test_findnode_message
+printf "\n"
+test_nodes_message
 printf "\n"
 test_whoareyou_message
 printf "\n"

@@ -389,6 +389,130 @@ decode_findnode_message() {
     printf '%s %s %s %s %s %s %s %s' "$protocol_id" "$version" "$flag" "$nonce" "$authdata_size" "$src_node_id" "$req_id" "$distance"
 }
 
+# Function to encode the NODES message (flag = 0x00)
+encode_nodes_message() {
+    local src_node_id="$1"
+    local dest_node_id="$2"
+    local nonce="$3"
+    local read_key="$4"
+    local req_id="$5"
+    local total="$6"
+    shift 6
+    local enrs=("$@")  # Remaining arguments are ENRs
+
+    # Use read_key as masking IV
+    local masking_iv=$read_key
+
+    # Protocol Version
+    local version="0001"
+
+    # NODES message flag
+    local flag="00"
+    
+    # Fixed authdata size for ordinary messages (32 bytes for src-id)
+    local authdata_size="0020"
+    local authdata=$src_node_id  # SRC Node ID is 32 bytes (64 hex characters)
+
+    # Encode masked header
+    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "${dest_node_id:0:32}" "$masking_iv")
+
+    # 0x04 for NODES message
+    local message_type="04"
+
+    # Prepare the message content (NODES RLP: [req_id, total, [enrs]])
+    # Build the list of ENRs in RLP format
+    local enr_list_rlp="["
+
+    for enr in "${enrs[@]}"; do
+        enr_list_rlp+="\"$enr\","
+    done
+
+    # Remove trailing comma if necessary
+    enr_list_rlp="${enr_list_rlp%,}]"
+
+    # Full RLP message content
+    local rlp_message_content=$(rlp_encode "[\"$req_id\",$total,$enr_list_rlp]")
+
+    local message_data=$(encrypt_message_data "$message_type" "$rlp_message_content" "$masking_iv" "$masked_header" "$read_key" "$nonce")
+
+    # Return the complete NODES message
+    printf '%s' "$message_data"
+}
+
+# Function to decode the NODES message (flag = 0x00)
+decode_nodes_message() {
+    local packet="$1"
+    local dest_node_id="$2"
+    local read_key="$3"
+
+    # Decode the header
+    local header=$(decode_masked_header "$packet" "$dest_node_id")
+
+    # Extract header components
+    local protocol_id=${header:0:12}
+    local version=${header:12:4}
+    local flag=${header:16:2}
+    local nonce=${header:18:24}
+    local authdata_size=${header:42:4}
+    local src_node_id=${header:46:64}
+
+    # Verify protocol ID
+    if [ "$protocol_id" != "646973637635" ]; then  # "discv5" in hex
+        printf "Invalid protocol ID\n" >&2
+        return 1
+    fi
+
+    # Verify flag (should be 00 for ordinary messages)
+    if [ "$flag" != "00" ]; then
+        printf "Invalid flag: expected 00, got %s\n" "$flag" >&2
+        return 1
+    fi
+
+    # Convert authdata_size from hex to decimal
+    local authdata_size_dec=$((16#$authdata_size))
+
+    # Decrypt the message content
+    read -r message_type message_content <<< $(decrypt_message_data "$packet" "$read_key" "$nonce" "$authdata_size")
+
+    # Verify message type (should be 04 for NODES)
+    if [ "$message_type" != "04" ]; then
+        printf "Invalid message type: expected 04, got %s\n" "$message_type" >&2
+        return 1
+    fi
+
+    # Parse RLP-encoded content
+    local decoded_rlp_message_content=$(rlp_decode "$message_content")
+
+    # Extract req_id, total, and enrs
+    # Remove leading and trailing brackets and quotes
+    local content="${decoded_rlp_message_content#\[}"
+    content="${content%\]}"
+    IFS=',' read -ra array <<< "$content"
+
+    local req_id=${array[0]//\"/}
+    local total=${array[1]}
+    local enrs_raw="${array[@]:2}"
+
+    # Process the ENRs
+    # Reconstruct the ENR list
+    local enrs=()
+    for (( i=2; i<${#array[@]}; i++ )); do
+        local enr=${array[$i]}
+        # Remove surrounding quotes if present
+        enr=${enr//\"/}
+        # Remove leading and trailing brackets
+        enr=${enr#\[}
+        enr=${enr%\]}
+        enrs+=("$enr")
+    done
+
+    # Output decoded components
+    printf '%s %s %s %s %s %s %s %s\n' "$protocol_id" "$version" "$flag" "$nonce" "$authdata_size" "$src_node_id" "$req_id" "$total"
+    # Print the ENRs
+    for enr in "${enrs[@]}"; do
+        printf '%s\n' "$enr"
+    done
+}
 
 # Function to encode the WHOAREYOU message (flag = 0x01)
 encode_whoareyou_message() {
@@ -601,8 +725,6 @@ id_sign() {
     # Return the signature
     printf "%s" "$signature"
 }
-
-
 
 # Function to retrieve the message type from a packet
 get_message_type() {
