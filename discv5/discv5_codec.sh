@@ -598,7 +598,7 @@ encode_handshake_message() {
     # Create id-signature
     local id_signature_text="discovery v5 identity proof"
     local id_signature_input="${id_signature_text}${challenge_data}${ephemeral_public_key}${dest_node_id}"
-    local id_signature_hash=$(printf "%s" "$id_signature_input" | openssl dgst -sha256 -binary | xxd -p -c 32)
+    local id_signature_hash=$(printf "%s" "$id_signature_input" | openssl dgst -sha256 -binary | bin_to_hex)
     local id_signature=$(id_sign "$id_signature_hash" "$static_private_key")
     local id_sign_result=$?
     if [ $id_sign_result -ne 0 ] || [ ${#id_signature} -ne 128 ]; then
