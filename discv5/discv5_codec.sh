@@ -112,7 +112,7 @@ decrypt_message_data() {
     local encrypted_message=${packet:$((32 + header_length))}
 
     # Decrypt the message content
-    local decrypted_message=$(python discv5/aes_gcm.py decrypt "$read_key" "$nonce" "$encrypted_message" "$message_ad")
+    local decrypted_message=$(python discv5/aes_gcm.py decrypt "$read_key" "$nonce" "$encrypted_message" "$message_ad" 2>/dev/null)
 
     # Extract message_type and message_content
     local message_type=${decrypted_message:0:2}
@@ -120,6 +120,16 @@ decrypt_message_data() {
 
     # Return the decrypted message type and message contents
     printf '%s %s' "$message_type" "$message_content"
+}
+
+# Function to generate a random packet
+generate_random_message() {
+    # Generate a random packet of a plausible size
+    # 32 bytes for masking_iv + header, 44 bytes for encrypted content
+    local random_packet=$(generate_random_bytes 76 | bin_to_hex)
+
+    # Return the random packet
+    printf "$random_packet"
 }
 
 
@@ -136,8 +146,11 @@ encode_ping_message() {
     nonce=$(printf '%024s' "$nonce")
     read_key=$(printf '%032s' "$read_key")
 
-    # Use read_key as masking IV
-    local masking_iv=$read_key
+    # 16 bytes of dest_node_id for masking key
+    local masking_key="${dest_node_id:0:32}"  
+
+    # 16 random bytes for masking IV
+    local masking_iv=$(generate_random_bytes 16 | bin_to_hex)
 
     # Protocol Version
     local version="0001"
@@ -150,7 +163,7 @@ encode_ping_message() {
     local authdata=$src_node_id  # SRC Node ID is 32 bytes (64 characters)
 
     # Encode masked header
-    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "${dest_node_id:0:32}" "$masking_iv")
+    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "$masking_key" "$masking_iv")
 
     # 0x01 for PING message
     local message_type="01" 
@@ -183,13 +196,13 @@ decode_ping_message() {
 
     # Verify protocol ID
     if [ "$protocol_id" != "646973637635" ]; then  # "discv5" in hex
-        printf "Invalid protocol ID\n"
+        printf "Invalid protocol ID\n" >&2
         return 1
     fi
 
     # Verify flag (should be 00 for ordinary messages like PING)
     if [ "$flag" != "00" ]; then
-        printf "Invalid flag: expected 00, got %s\n" "$flag"
+        printf "Invalid flag: expected 00, got %s\n" "$flag" >&2
         return 1
     fi
 
@@ -223,8 +236,11 @@ encode_pong_message() {
     local ip="$7"
     local port="$8"
 
-    # Use read_key as masking IV
-    local masking_iv=$read_key
+    # 16 bytes of dest_node_id for masking key
+    local masking_key="${dest_node_id:0:32}"  
+
+    # 16 random bytes for masking IV
+    local masking_iv=$(generate_random_bytes 16 | bin_to_hex)
 
     # Protocol Version
     local version="0001"
@@ -237,7 +253,7 @@ encode_pong_message() {
     local authdata=$src_node_id
 
     # Encode masked header
-    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "${dest_node_id:0:32}" "$masking_iv")
+    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "$masking_key" "$masking_iv")
 
    # 0x02 for PONG message
     local message_type="02" 
@@ -310,8 +326,11 @@ encode_findnode_message() {
     local req_id="$5"
     local distance="$6"
 
-    # Use read_key as masking IV
-    local masking_iv=$read_key
+    # 16 bytes of dest_node_id for masking key
+    local masking_key="${dest_node_id:0:32}"  
+
+    # 16 random bytes for masking IV
+    local masking_iv=$(generate_random_bytes 16 | bin_to_hex)
 
     # Protocol Version
     local version="0001"
@@ -324,7 +343,7 @@ encode_findnode_message() {
     local authdata=$src_node_id  # SRC Node ID is 32 bytes (64 hex characters)
 
     # Encode masked header
-    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "${dest_node_id:0:32}" "$masking_iv")
+    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "$masking_key" "$masking_iv")
 
     # 0x03 for FINDNODE message
     local message_type="03"
@@ -400,8 +419,11 @@ encode_nodes_message() {
     shift 6
     local enrs=("$@")  # Remaining arguments are ENRs
 
-    # Use read_key as masking IV
-    local masking_iv=$read_key
+    # 16 bytes of dest_node_id for masking key
+    local masking_key="${dest_node_id:0:32}"  
+
+    # 16 random bytes for masking IV
+    local masking_iv=$(generate_random_bytes 16 | bin_to_hex)
 
     # Protocol Version
     local version="0001"
@@ -414,7 +436,7 @@ encode_nodes_message() {
     local authdata=$src_node_id  # SRC Node ID is 32 bytes (64 hex characters)
 
     # Encode masked header
-    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "${dest_node_id:0:32}" "$masking_iv")
+    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "$masking_key" "$masking_iv")
 
     # 0x04 for NODES message
     local message_type="04"
@@ -516,14 +538,12 @@ decode_nodes_message() {
 
 # Function to encode the WHOAREYOU message (flag = 0x01)
 encode_whoareyou_message() {
-    local dest_node_id="$1"
-    local nonce="$2"
-    local id_nonce="$3"
-    local enr_seq="$4"
-    local masking_iv="$5"
+    local nonce="$1"
+    local id_nonce="$2"
+    local enr_seq="$3"
 
     # Check if any conversion failed
-    if [[ -z "$dest_node_id" || -z "$nonce" || -z "$id_nonce" || -z "$enr_seq" ]]; then
+    if [[ -z "$nonce" || -z "$id_nonce" || -z "$enr_seq" ]]; then
         printf "Error: Failed to convert inputs to valid hex strings\n" >&2
         return 1
     fi
@@ -540,8 +560,14 @@ encode_whoareyou_message() {
     # Combine id_nonce and enr_seq to create authdata
     local authdata="${id_nonce}${enr_seq}"
 
+    # 16 bytes of zeros for masking key
+    local masking_key="00000000000000000000000000000000"  
+
+    # 16 random bytes for masking IV
+    local masking_iv=$(generate_random_bytes 16 | bin_to_hex)
+
     # Encode masked header
-    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "${dest_node_id:0:32}" "$masking_iv")
+    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "$masking_key" "$masking_iv")
 
     # Combine masking IV and masked header
     printf '%s%s' "$masking_iv" "$masked_header"
@@ -550,10 +576,12 @@ encode_whoareyou_message() {
 # Decode WHOAREYOU message (flag = 0x01)
 decode_whoareyou_message() {
     local packet=$1
-    local dest_id=$2
+
+    # Set masking_key to zeros (since sender doesn't know dest-node-id)
+    local dest_node_id="00000000000000000000000000000000"  # 16 bytes of zeros
 
     # Decode the header
-    local header=$(decode_masked_header "$packet" "$dest_node_id" "$read_key")
+    local header=$(decode_masked_header "$packet" "$dest_node_id")
 
     # Extract header components
     local protocol_id=${header:0:12}
@@ -566,7 +594,7 @@ decode_whoareyou_message() {
 
     # Verify protocol ID
     if [ "$protocol_id" != "646973637635" ]; then  # "discv5" in hex
-        printf "Invalid protocol ID"
+        printf "Invalid protocol ID\n" >&2
         return 1
     fi
 
@@ -623,11 +651,14 @@ encode_handshake_message() {
     local authdata_head="${src_node_id}$(printf '%02x' $sig_size)$(printf '%02x' $eph_key_size)"
     local authdata="${authdata_head}${id_signature}${ephemeral_public_key}${record}"
 
-    # Generate random masking_iv (16 bytes)
-    local masking_iv=$read_key #$(openssl rand -hex 16)
+    # 16 bytes of dest_node_id for masking key
+    local masking_key="${dest_node_id:0:32}"
+
+    # 16 random bytes for masking IV
+    local masking_iv=$(generate_random_bytes 16 | bin_to_hex)
 
     # Encode masked header
-    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size_hex" "$authdata" "${dest_node_id:0:32}" "$masking_iv")
+    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size_hex" "$authdata" "$masking_key" "$masking_iv")
 
     # Handshake messages don't have a separate message type, so we use dummy data
     local message_type="00"
@@ -729,32 +760,57 @@ id_sign() {
 # Function to retrieve the message type from a packet
 get_message_type() {
     local packet="$1"
-    local dest_node_id="$2"
-    local read_key=${packet:0:32}
+    local local_node_id="$2"
+    
+    # Extract potential header (next 55 bytes / 110 hex characters)
+    local potential_header=$(decode_masked_header "$packet" "00000000000000000000000000000000")
 
-    # Decode the header and extract the nonce
-    local header=$(decode_masked_header "$packet" "$dest_node_id")
-    local nonce=${header:18:24}
+    # Check if this is a WHOAREYOU message (unmasked header)
+    if [[ ${potential_header:0:12} == "646973637635" ]]; then # "discv5" in hex
+        local version=${potential_header:12:4}
+        local flag=${potential_header:16:2}
+        local nonce=${potential_header:18:24}
+        local authdata_size=${potential_header:42:4}
 
-    # Decrypt the message type and message content
-    read -r message_type message_content <<< $(decrypt_message_data "$packet" "$read_key" "$nonce")
+        # Additional checks for WHOAREYOU message
+        if [[ "$flag" == "01" && "$authdata_size" == "0018" ]]; then
+            # WHOAREYOU message
+            printf "WHOAREYOU"
+        fi
+    else
 
-    # Extract message type and content
-    local message_type_int=$((16#$message_type))
+        # Decode the header and extract the nonce
+        local header=$(decode_masked_header "$packet" "$local_node_id")
+        local flag="${header:16:2}"
+        local nonce="${header:18:24}"
 
-    case "$message_type" in
-        "01") printf "PING" ;;
-        "02") printf "PONG" ;;
-        "03") printf "FINDNODE" ;;
-        "04") printf "NODES" ;;
-        "05") printf "TALKREQ" ;;
-        "06") printf "TALKRESP" ;;
-        "07") printf "REGTOPIC" ;;
-        "08") printf "TICKET" ;;
-        "09") printf "REGCONFIRMATION" ;;
-        "0a") printf "TOPICQUERY" ;;
-        *) printf "Unknown message type: $message_type" ;;
-    esac
+        if [ "$flag" == "02" ]; then
+            # HANDSHAKE packet
+            printf "HANDSHAKE"
+        else
+            local read_key=${packet:0:32}
+
+            # Decrypt the message type and message content
+            read -r message_type message_content <<< $(decrypt_message_data "$packet" "$read_key" "$nonce")
+
+            # Extract message type and content
+            local message_type_int=$((16#$message_type))
+
+            case "$message_type" in
+                "01") printf "PING" ;;
+                "02") printf "PONG" ;;
+                "03") printf "FINDNODE" ;;
+                "04") printf "NODES" ;;
+                "05") printf "TALKREQ" ;;
+                "06") printf "TALKRESP" ;;
+                "07") printf "REGTOPIC" ;;
+                "08") printf "TICKET" ;;
+                "09") printf "REGCONFIRMATION" ;;
+                "0a") printf "TOPICQUERY" ;;
+                *) printf "RANDOM" ;;
+            esac
+        fi
+    fi
 }
 
 

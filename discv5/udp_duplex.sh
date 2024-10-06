@@ -22,7 +22,9 @@ keep_running=true
 add_to_queue() {
     local queue_file="$1"
     local message="$2"
+    local source_ip="$3"
     printf '%s\n' "$message" >> "$queue_file"
+    printf '%s\n' "$source_ip" >> "$queue_file"
 }
 
 # UDP Sender function
@@ -33,15 +35,28 @@ send_udp() {
     printf '%s' "$message" | nc -u -w1 "$host" "$port"
 }
 
+# Function get the source IP and message
+handle_udp_message() {
+    # Read the message from stdin
+    IFS= read -r -d '' message || true
+    # Output the source IP and message separated by null characters
+    printf '%s\0%s\0' "$SOCAT_PEERADDR" "$message"
+}
+export -f handle_udp_message
+
+
 # UDP Receiver function
 receive_udp() {
     local port="$1"
     while $keep_running; do
-        message=$(timeout 1 nc -ul "$port")
-        if [ -n "$message" ]; then
-            #printf "Received: %s\n" "$message"
-            add_to_queue "$INCOMING_QUEUE" "$message"
-        fi
+        socat -u UDP4-RECVFROM:$port,fork EXEC:'/bin/bash -c "handle_udp_message"' 2>/dev/null | \
+        while IFS= read -r -d '' source_ip && \
+              IFS= read -r -d '' message; do
+            if [ ${#message} -gt 5 ]; then
+                # Add the message to the incoming queue
+                add_to_queue "$INCOMING_QUEUE" "$message" "$source_ip"
+            fi
+        done
     done
 }
 
@@ -49,9 +64,11 @@ receive_udp() {
 process_incoming_messages() {
     while $keep_running; do
         if [ -s "$INCOMING_QUEUE" ]; then
-            message=$(head -n 1 "$INCOMING_QUEUE")
+            local message=$(head -n 1 "$INCOMING_QUEUE")
             sed -i '1d' "$INCOMING_QUEUE"
-            process_message "$message"
+            local ip=$(head -n 1 "$INCOMING_QUEUE")
+            sed -i '1d' "$INCOMING_QUEUE"
+            process_message "$message" "$ip"
         fi
         sleep 0.1
     done
@@ -60,20 +77,62 @@ process_incoming_messages() {
 # Function to process a single message
 process_message() {
     local message="$1"
-
+    local ip="$2"
     local message_type=$(get_message_type "$message" "$SRC_NODE_ID")
-    printf "Message Type: %s\n" "$message_type"
-    if [ "$message_type" == "PING" ]; then
+    printf "Received message type: %s from %s%s\n" "$message_type" "$ip" >&2
+    if [ "$message_type" == "RANDOM" ]; then
+        # Send a WHOAREYOU message
+        local src_node_id=$SRC_NODE_ID
+        local nonce=$(generate_random_bytes 12 | bin_to_hex)
+        local id_nonce=$(generate_random_bytes 16 | bin_to_hex)
+        local enr_seq=$(generate_random_bytes 8 | bin_to_hex)
+        local masking_iv=$(generate_random_bytes 16 | bin_to_hex)
+
+        # Encode the WHOAREYOU message
+        local whoareyou_message=$(encode_whoareyou_message "$nonce" "$id_nonce" "$enr_seq" "$masking_iv")
+
+        # Add the WHOAREYOU message to the outgoing queue
+        add_to_queue "$OUTGOING_QUEUE" "$whoareyou_message" "$ip"
+        printf "Sending WHOAREYOU message\n" >&2
+    elif [ "$message_type" == "PING" ]; then
+        # Send a PONG message
         local src_node_id=$SRC_NODE_ID
         local dest_node_id=$DEST_NODE_ID
         local nonce=$(generate_random_bytes 12 | bin_to_hex)
         local read_key=$(generate_random_bytes 16 | bin_to_hex)
         local req_id=$(generate_random_bytes 2 | bin_to_hex)
         local enr_seq=$(generate_random_bytes 8 | bin_to_hex)
-        local ip="$(( RANDOM % 256 )).$(( RANDOM % 256 )).$(( RANDOM % 256 )).$(( RANDOM % 256 ))"
-        local port=$((RANDOM % 65536))
+
+        # Encode the PONG message
         local pong_message=$(encode_pong_message "$src_node_id" "$dest_node_id" "$nonce" "$read_key" "$req_id" "$enr_seq")
-        add_to_queue "$OUTGOING_QUEUE" "$pong_message"
+
+        # Add the PONG message to the outgoing queue
+        add_to_queue "$OUTGOING_QUEUE" "$pong_message" "$ip"
+        printf "Sending PONG message\n" >&2
+    elif [ "$message_type" == "WHOAREYOU" ]; then
+        # Send a HANDSHAKE message
+        local src_node_id=$SRC_NODE_ID
+        local dest_node_id=$DEST_NODE_ID
+        local nonce=$(generate_random_bytes 12 | bin_to_hex)
+        local read_key=$(generate_random_bytes 16 | bin_to_hex)
+        local challenge_data=$(generate_random_bytes 32 | bin_to_hex)
+
+        # Generate ephemeral key pair
+        read ephemeral_private_key ephemeral_public_key ephemeral_private_key_file <<< $(generate_secp256k1_keypair)
+
+        # Generate static private key
+        read static_private_key static_public_key static_private_key_file <<< $(generate_secp256k1_keypair)
+
+        # Include the ENR record
+        local record=$(generate_random_bytes 100 | bin_to_hex)
+
+        # Encode the handshake message
+        local encoded_message=$(encode_handshake_message "$src_node_id" "$dest_node_id" "$nonce" "$read_key" "$challenge_data" "$ephemeral_public_key" "$ephemeral_private_key" "$static_private_key" "$record")
+
+        # Add the message to the outgoing queue
+        add_to_queue "$OUTGOING_QUEUE" "$encoded_message" "$ip"
+
+        printf "Sending HANDSHAKE message\n" >&2
     fi
 }
 
@@ -81,28 +140,14 @@ process_message() {
 process_outgoing_messages() {
     while $keep_running; do
         if [ -s "$OUTGOING_QUEUE" ]; then
-            message=$(head -n 1 "$OUTGOING_QUEUE")
+            local message=$(head -n 1 "$OUTGOING_QUEUE")
             sed -i '1d' "$OUTGOING_QUEUE"
-            send_udp "$SEND_HOST" "$SEND_PORT" "$message"
-            #printf "Sent message to %s:%s - %s\n" "$SEND_HOST" "$SEND_PORT" "$message"
+            local ip=$(head -n 1 "$OUTGOING_QUEUE")
+            sed -i '1d' "$OUTGOING_QUEUE"
+            send_udp "$ip" "$DEST_PORT" "$message"
         fi
         sleep 0.1
     done
-}
-
-# Function to send the next message in the queue
-send_next_message() {
-    if [ ${#outgoing_message_queue[@]} -eq 0 ]; then
-        return 1  # Queue is empty
-    fi
-    
-    local next_message="${outgoing_message_queue[0]}"
-    outgoing_message_queue=("${outgoing_message_queue[@]:1}")  # Remove the first element
-    
-    local host port message
-    IFS=':' read -r host port message <<< "$next_message"
-    send_udp "$host" "$port" "$message"
-    #printf "Sent message to %s:%s - %s\n" "$host" "$port" "$message"
 }
 
 # Function to clean up resources

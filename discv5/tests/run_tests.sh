@@ -206,18 +206,16 @@ test_nodes_message() {
 
 # Test encoding and decoding of WHOAREYOU message
 test_whoareyou_message() {
-    local dest_node_id=$(generate_random_bytes 32 | bin_to_hex)
     local nonce=$(generate_random_bytes 12 | bin_to_hex)
     local id_nonce=$(generate_random_bytes 16 | bin_to_hex)
     local enr_seq=$(generate_random_bytes 8 | bin_to_hex)
-    local masking_iv=$(generate_random_bytes 16 | bin_to_hex)
 
     echo "Encoding WHOAREYOU message..."
-    local encoded_message=$(encode_whoareyou_message "$dest_node_id" "$nonce" "$id_nonce" "$enr_seq" "$masking_iv")
+    local encoded_message=$(encode_whoareyou_message "$nonce" "$id_nonce" "$enr_seq" "$masking_iv")
     
     echo "Decoding WHOAREYOU message..."
     read -r decoded_protocol_id decoded_version decoded_flag decoded_nonce decoded_authdata_size decoded_id_nonce \
-            decoded_enr_seq <<< $(decode_whoareyou_message "$encoded_message" "$dest_node_id")
+            decoded_enr_seq <<< $(decode_whoareyou_message "$encoded_message")
 
     # Compare values
     if [[ "$nonce" == "$decoded_nonce" && 
@@ -245,15 +243,12 @@ test_handshake_message() {
     local challenge_data=$(generate_random_bytes 32 | bin_to_hex)
 
     # Generate ephemeral key pair
-    local ephemeral_key=$(openssl ecparam -name secp256k1 -genkey -noout -outform DER | xxd -p -c 256)
-    local ephemeral_private_key=${ephemeral_key:14:64}
-    local ephemeral_public_key=$(openssl ec -inform DER -in <(printf "%s" "$ephemeral_key" | xxd -r -p) -pubout -outform DER -conv_form compressed 2>/dev/null | tail -c 33 | xxd -p -c 66)
+    read ephemeral_private_key ephemeral_public_key ephemeral_private_key_file <<< $(generate_secp256k1_keypair)
     
     # Generate static private key
-    local static_key=$(openssl ecparam -name secp256k1 -genkey -noout -outform DER | xxd -p -c 256)
-    local static_private_key=${static_key:14:64}
+    read static_private_key static_public_key static_private_key_file <<< $(generate_secp256k1_keypair)
 
-    local record=$(openssl rand -hex 100)  # Shortened for simplicity
+    local record=$(generate_random_bytes 100 | bin_to_hex) # Shortened for simplicity
 
     printf "Encoding HANDSHAKE message...\n"
     local encoded_message=$(encode_handshake_message "$src_node_id" "$dest_node_id" "$nonce" "$read_key" "$challenge_data" "$ephemeral_public_key" "$ephemeral_private_key" "$static_private_key" "$record")

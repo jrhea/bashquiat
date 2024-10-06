@@ -13,3 +13,8 @@ To test the implementation, run the following command:
 chmod +x discv5/tests/run_tests.sh 
 ./discv5/tests/run_tests.sh
 ```
+
+## Dependencies
+
+- python 3
+- socat

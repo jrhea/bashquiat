@@ -2,8 +2,8 @@
 
 session_name="bashquiat"
 window_name="bashquiat"
-pane_1_cmd="./discv5/discv5.sh 12345 127.0.0.1 54321 aaaa8419e9f49d0083561b48287df592939a8d19947d8c0ef88f2a4856a69fbb bbbb9d047f0488c0b5a93c1c3f2d8bafc7c8ff337024a55434a0d0555de64db9"
-pane_2_cmd="./discv5/discv5.sh 54321 127.0.0.1 12345 bbbb9d047f0488c0b5a93c1c3f2d8bafc7c8ff337024a55434a0d0555de64db9 aaaa8419e9f49d0083561b48287df592939a8d19947d8c0ef88f2a4856a69fbb"
+pane_1_cmd="./discv5/discv5.sh bbbb9d047f0488c0b5a93c1c3f2d8bafc7c8ff337024a55434a0d0555de64db9 12345"
+pane_2_cmd="./discv5/discv5.sh aaaa8419e9f49d0083561b48287df592939a8d19947d8c0ef88f2a4856a69fbb 12346 bbbb9d047f0488c0b5a93c1c3f2d8bafc7c8ff337024a55434a0d0555de64db9 127.0.0.1 12345"
 
 # Create a new tmux session
 tmux new-session -d -s "$session_name" -n "$window_name"
