@@ -1,6 +1,7 @@
 #!/bin/bash
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+source $DIR/../cryptography/utils.sh
 source $DIR/discv5_codec.sh
 
 # Create temporary files for our queues
@@ -133,6 +134,9 @@ process_message() {
         add_to_queue "$OUTGOING_QUEUE" "$encoded_message" "$ip"
 
         printf "Sending HANDSHAKE message\n" >&2
+    elif [ "$message_type" == "HANDSHAKE" ]; then
+        # TODO: Process the handshake message
+        printf "Received HANDSHAKE message\n" >&2
     fi
 }
 
