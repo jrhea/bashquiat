@@ -5,7 +5,7 @@ source $DIR/utils.sh
 source $DIR/../rlp/rlp_codec.sh
 
 # Function to encode header
-encode_masked_header() {
+encrypt_masked_header() {
     local version="$1"
     local flag="$2"
     local nonce="$3"
@@ -41,7 +41,7 @@ encode_masked_header() {
 }
 
 # Function to decode the header of a message
-decode_masked_header() {
+decrypt_masked_header() {
     local packet="$1"
     local dest_node_id="$2"
 
@@ -163,7 +163,7 @@ encode_ping_message() {
     local authdata=$src_node_id  # SRC Node ID is 32 bytes (64 characters)
 
     # Encode masked header
-    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "$masking_key" "$masking_iv")
+    local masked_header=$(encrypt_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "$masking_key" "$masking_iv")
 
     # 0x01 for PING message
     local message_type="01" 
@@ -184,7 +184,7 @@ decode_ping_message() {
     local read_key="$3"
 
     # Decode the header
-    local header=$(decode_masked_header "$packet" "$dest_node_id")
+    local header=$(decrypt_masked_header "$packet" "$dest_node_id")
 
     # Extract header components
     local protocol_id=${header:0:12}
@@ -253,7 +253,7 @@ encode_pong_message() {
     local authdata=$src_node_id
 
     # Encode masked header
-    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "$masking_key" "$masking_iv")
+    local masked_header=$(encrypt_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "$masking_key" "$masking_iv")
 
    # 0x02 for PONG message
     local message_type="02" 
@@ -274,7 +274,7 @@ decode_pong_message() {
     local read_key="$3"
 
     # Decode the header
-    local header=$(decode_masked_header "$packet" "$dest_node_id")
+    local header=$(decrypt_masked_header "$packet" "$dest_node_id")
 
     # Extract header components
     local protocol_id=${header:0:12}
@@ -343,7 +343,7 @@ encode_findnode_message() {
     local authdata=$src_node_id  # SRC Node ID is 32 bytes (64 hex characters)
 
     # Encode masked header
-    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "$masking_key" "$masking_iv")
+    local masked_header=$(encrypt_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "$masking_key" "$masking_iv")
 
     # 0x03 for FINDNODE message
     local message_type="03"
@@ -364,7 +364,7 @@ decode_findnode_message() {
     local read_key="$3"
 
     # Decode the header
-    local header=$(decode_masked_header "$packet" "$dest_node_id")
+    local header=$(decrypt_masked_header "$packet" "$dest_node_id")
 
     # Extract header components
     local protocol_id=${header:0:12}
@@ -436,7 +436,7 @@ encode_nodes_message() {
     local authdata=$src_node_id  # SRC Node ID is 32 bytes (64 hex characters)
 
     # Encode masked header
-    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "$masking_key" "$masking_iv")
+    local masked_header=$(encrypt_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "$masking_key" "$masking_iv")
 
     # 0x04 for NODES message
     local message_type="04"
@@ -468,7 +468,7 @@ decode_nodes_message() {
     local read_key="$3"
 
     # Decode the header
-    local header=$(decode_masked_header "$packet" "$dest_node_id")
+    local header=$(decrypt_masked_header "$packet" "$dest_node_id")
 
     # Extract header components
     local protocol_id=${header:0:12}
@@ -567,7 +567,7 @@ encode_whoareyou_message() {
     local masking_iv=$(generate_random_bytes 16 | bin_to_hex)
 
     # Encode masked header
-    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "$masking_key" "$masking_iv")
+    local masked_header=$(encrypt_masked_header "$version" "$flag" "$nonce" "$authdata_size" "$authdata" "$masking_key" "$masking_iv")
 
     # Combine masking IV and masked header
     printf '%s%s' "$masking_iv" "$masked_header"
@@ -581,7 +581,7 @@ decode_whoareyou_message() {
     local dest_node_id="00000000000000000000000000000000"  # 16 bytes of zeros
 
     # Decode the header
-    local header=$(decode_masked_header "$packet" "$dest_node_id")
+    local header=$(decrypt_masked_header "$packet" "$dest_node_id")
 
     # Extract header components
     local protocol_id=${header:0:12}
@@ -658,7 +658,7 @@ encode_handshake_message() {
     local masking_iv=$(generate_random_bytes 16 | bin_to_hex)
 
     # Encode masked header
-    local masked_header=$(encode_masked_header "$version" "$flag" "$nonce" "$authdata_size_hex" "$authdata" "$masking_key" "$masking_iv")
+    local masked_header=$(encrypt_masked_header "$version" "$flag" "$nonce" "$authdata_size_hex" "$authdata" "$masking_key" "$masking_iv")
 
     # Handshake messages don't have a separate message type, so we use dummy data
     local message_type="00"
@@ -678,7 +678,7 @@ decode_handshake_message() {
     local read_key="$3"
 
     # Decode the header
-    local header=$(decode_masked_header "$packet" "$dest_node_id")
+    local header=$(decrypt_masked_header "$packet" "$dest_node_id")
 
     # Extract header components
     local protocol_id=${header:0:12}
@@ -763,7 +763,7 @@ get_message_type() {
     local local_node_id="$2"
     
     # Extract potential header (next 55 bytes / 110 hex characters)
-    local potential_header=$(decode_masked_header "$packet" "00000000000000000000000000000000")
+    local potential_header=$(decrypt_masked_header "$packet" "00000000000000000000000000000000")
 
     # Check if this is a WHOAREYOU message (unmasked header)
     if [[ ${potential_header:0:12} == "646973637635" ]]; then # "discv5" in hex
@@ -780,7 +780,7 @@ get_message_type() {
     else
 
         # Decode the header and extract the nonce
-        local header=$(decode_masked_header "$packet" "$local_node_id")
+        local header=$(decrypt_masked_header "$packet" "$local_node_id")
         local flag="${header:16:2}"
         local nonce="${header:18:24}"
 
