@@ -1,7 +1,7 @@
 #!/bin/bash
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-source $DIR/../cryptography/utils.sh
+source $DIR/../../cryptography/utils.sh
 source $DIR/../discv5_codec.sh
 
 # Test encoding and decoding of PING message

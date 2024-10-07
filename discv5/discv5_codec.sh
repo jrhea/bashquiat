@@ -34,7 +34,7 @@ encode_masked_header() {
     local header="${static_header}${authdata}"
 
     # Encode masked header
-    local masked_header=$(printf '%s' "$header" | hex_to_bin | openssl enc -aes-128-ctr -K "$masking_key" -iv "$masking_iv" -nosalt | bin_to_hex)
+    local masked_header=$(printf '%s' "$header" | hex_to_bin | aesctr_encrypt "$masking_key" "$masking_iv" | bin_to_hex)
 
     # Return the header
     printf '%s' "$masked_header"
@@ -53,7 +53,7 @@ decode_masked_header() {
     local masking_key=${dest_node_id:0:32}
 
     # Decrypt header
-    local header=$(printf '%s' "$masked_header" | hex_to_bin | openssl enc -aes-128-ctr -d -K "$masking_key" -iv "$masking_iv" -nosalt | bin_to_hex)
+    local header=$(printf '%s' "$masked_header" | hex_to_bin | aesctr_decrypt "$masking_key" "$masking_iv" | bin_to_hex)
 
     # Return the decrypted header
     printf '%s' "$header"
@@ -77,7 +77,7 @@ encrypt_message_data() {
 
     # Encrypt the message content using AES-GCM
     # message       = aesgcm_encrypt(initiator-key, nonce, message-pt, message-ad)
-    local encrypted_message=$(python discv5/aes_gcm.py encrypt "$read_key" "$nonce" "$message_pt" "$message_ad")
+    local encrypted_message=$(aesgcm_encrypt "$read_key" "$nonce" "$message_pt" "$message_ad")
     #local encrypted_message=$(printf '%s' "$message_pt" | hex_to_bin | /usr/local/libressl/bin/openssl enc -aes-128-gcm -K "$read_key" -iv "$nonce" | bin_to_hex)
 
     # Combine all parts
@@ -112,7 +112,7 @@ decrypt_message_data() {
     local encrypted_message=${packet:$((32 + header_length))}
 
     # Decrypt the message content
-    local decrypted_message=$(python discv5/aes_gcm.py decrypt "$read_key" "$nonce" "$encrypted_message" "$message_ad" 2>/dev/null)
+    local decrypted_message=$(aesgcm_decrypt "$read_key" "$nonce" "$encrypted_message" "$message_ad" 2>/dev/null)
 
     # Extract message_type and message_content
     local message_type=${decrypted_message:0:2}
@@ -626,7 +626,7 @@ encode_handshake_message() {
     # Create id-signature
     local id_signature_text="discovery v5 identity proof"
     local id_signature_input="${id_signature_text}${challenge_data}${ephemeral_public_key}${dest_node_id}"
-    local id_signature_hash=$(printf "%s" "$id_signature_input" | openssl dgst -sha256 -binary | bin_to_hex)
+    local id_signature_hash=$(printf "%s" "$id_signature_input" | sha256 | bin_to_hex)
     local id_signature=$(id_sign "$id_signature_hash" "$static_private_key")
     local id_sign_result=$?
     if [ $id_sign_result -ne 0 ] || [ ${#id_signature} -ne 128 ]; then
@@ -741,7 +741,7 @@ id_sign() {
     fi
 
     # Use the Python script to generate the signature
-    local signature=$(python discv5/ecdsa_sign.py "$message" "$private_key")
+    local signature=$(ecdsa_sign "$message" "$private_key")
     if [ $? -ne 0 ] || [ -z "$signature" ]; then
         printf "Error: Failed to generate signature\n" >&2
         return 1
