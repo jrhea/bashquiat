@@ -135,8 +135,19 @@ process_message() {
 
         printf "Sending HANDSHAKE message\n" >&2
     elif [ "$message_type" == "HANDSHAKE" ]; then
-        # TODO: Process the handshake message
-        printf "Received HANDSHAKE message\n" >&2
+        # Decode the handshake message
+        read protocol_id version flag nonce authdata_size src_node_id sig_size eph_key_size id_signature ephemeral_public_key record <<< $(decode_handshake_message "$message" "$SRC_NODE_ID" "$read_key")
+
+        # Verify the signature using src_node_id (public key)
+        # TODO: This is a placeholder for now
+        local verification_result=$(id_verify "$record" "$ephemeral_public_key" "$dest_node_id" "$id_signature" "$static_public_key")
+        if [ "$verification_result" != "True" ]; then
+            printf "Invalid id_signature from %s\n" "$ip" >&2
+            return 1
+        fi
+
+        # Proceed to compute the shared secret
+        #compute_shared_secret "$ephemeral_public_key" "$ip"
     fi
 }
 

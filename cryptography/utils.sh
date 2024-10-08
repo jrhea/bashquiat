@@ -79,9 +79,27 @@ ecdsa_sign() {
     python cryptography/ecdsa_sign.py "$message" "$private_key"
 }
 
+ecdsa_verify() {
+    local message_hash="$1"    # The hex-encoded SHA256 hash of the message
+    local signature="$2"       # The hex-encoded signature (r || s)
+    local public_key="$3"      # The hex-encoded compressed public key (33 bytes, starts with 02 or 03)
+
+    # Call the Python script to perform verification
+    local result=$(python cryptography/ecdsa_verify.py "$message_hash" "$signature" "$public_key")
+    if [ $? -ne 0 ]; then
+        printf "Error: Verification failed due to an error in the Python script.\n" >&2
+        return 1
+    fi
+
+    if [ "$result" == "True" ]; then
+        return 0  # Verification successful
+    else
+        return 1  # Verification failed
+    fi
+}
+
 # This function generates an ID signature based on the provided challenge data, 
 # ephemeral public key, destination node ID, and private key.
-# Note: This function is NOT deterministic.
 id_sign() {
     local challenge_data="$1"
     local ephemeral_public_key="$2"
@@ -89,9 +107,8 @@ id_sign() {
     local private_key="$4"
 
     # Compute SHA256 hash of the concatenated binary data
-    local id_signature_text="discovery v5 identity proof" 
-    local id_signature_input="${id_signature_text}$(printf "%s%s%s" "$challenge_data" "$ephemeral_public_key" "$dest_node_id" | hex_to_bin)"
-    local id_signature_hash=$(printf "%s" "$id_signature_input" | sha256 | bin_to_hex)
+    local id_signature_text="discovery v5 identity proof"
+    local id_signature_hash=$( (printf "%s" "$id_signature_text"; printf "%s%s%s" "$challenge_data" "$ephemeral_public_key" "$dest_node_id" | hex_to_bin) | sha256sum | awk '{print $1}')
 
     # Use the Python script to generate the signature
     local signature=$(ecdsa_sign "$id_signature_hash" "$private_key")
@@ -108,6 +125,25 @@ id_sign() {
 
     # Return the signature
     printf "%s" "$signature"
+}
+
+id_verify() {
+    local challenge_data="$1"
+    local ephemeral_public_key="$2"
+    local dest_node_id="$3"
+    local signature="$4"
+    local static_public_key="$5"
+
+    # Compute SHA256 hash of the concatenated binary data    
+    local id_signature_text="discovery v5 identity proof"
+    local id_signature_hash=$( (printf "%s" "$id_signature_text"; printf "%s%s%s" "$challenge_data" "$ephemeral_public_key" "$dest_node_id" | hex_to_bin) | sha256sum | awk '{print $1}')
+
+    # Verify the signature
+    if ecdsa_verify "$id_signature_hash" "$signature" "$static_public_key"; then
+        return 0
+    else
+        return 1
+    fi
 }
 
 # This function generates a SHA256 hash of the input

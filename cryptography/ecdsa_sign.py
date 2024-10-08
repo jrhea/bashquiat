@@ -1,39 +1,33 @@
-import argparse
-import binascii
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
-
 # ecdsa_sign.py
 import sys
 import binascii
-from cryptography.hazmat.primitives.asymmetric import ec, utils
-from cryptography.hazmat.primitives import hashes
+from eth_keys import keys
 
 def ecdsa_sign(message_hash_hex, private_key_hex):
     # Convert hex inputs to bytes
     message_hash_bytes = binascii.unhexlify(message_hash_hex)
     private_key_bytes = binascii.unhexlify(private_key_hex)
-
+    
     # Load the private key
-    private_key_int = int.from_bytes(private_key_bytes, byteorder='big')
-    private_key_obj = ec.derive_private_key(private_key_int, ec.SECP256K1())
-
-    # Sign the message hash
-    signature_der = private_key_obj.sign(
-        message_hash_bytes,
-        ec.ECDSA(utils.Prehashed(hashes.SHA256()))
-    )
-
-    # Convert DER signature to raw r || s format
-    r, s = utils.decode_dss_signature(signature_der)
-    r_bytes = r.to_bytes(32, byteorder='big')
-    s_bytes = s.to_bytes(32, byteorder='big')
-    signature_raw = r_bytes + s_bytes
-
-    return signature_raw.hex()
+    private_key = keys.PrivateKey(private_key_bytes)
+    
+    # Sign the message hash using deterministic ECDSA
+    signature = private_key.sign_msg_hash(message_hash_bytes)
+    
+    # Get the signature as r || s (64 bytes)
+    signature_bytes = signature.r.to_bytes(32, 'big') + signature.s.to_bytes(32, 'big')
+    
+    # Verify the signature immediately
+    public_key = private_key.public_key
+    is_valid = public_key.verify_msg_hash(message_hash_bytes, signature)
+    
+    return signature_bytes.hex()
 
 if __name__ == '__main__':
+    if len(sys.argv) != 3:
+        print("Usage: ecdsa_sign.py <message_hash_hex> <private_key_hex>", file=sys.stderr)
+        sys.exit(1)
+    
     message_hash_hex = sys.argv[1]
     private_key_hex = sys.argv[2]
     signature = ecdsa_sign(message_hash_hex, private_key_hex)
