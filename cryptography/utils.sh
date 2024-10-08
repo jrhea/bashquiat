@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# This function creates a keypair for secp256k1 curve
 generate_secp256k1_keypair() {
     local private_key_file=$(mktemp)
 
@@ -19,6 +20,7 @@ generate_secp256k1_keypair() {
     printf "$private_key_hex $public_key_hex $private_key_file"
 }
 
+# This function encrypts an AES-GCM message using the provided read key
 aesgcm_encrypt() {
     local read_key="$1"
     local nonce="$2"
@@ -27,6 +29,7 @@ aesgcm_encrypt() {
     python cryptography/aes_gcm.py encrypt "$read_key" "$nonce" "$message_pt" "$message_ad"
 }
 
+# This function decrypts an AES-GCM encrypted message using the provided read key
 aesgcm_decrypt() {
     local read_key="$1"
     local nonce="$2"
@@ -35,6 +38,7 @@ aesgcm_decrypt() {
     python cryptography/aes_gcm.py decrypt "$read_key" "$nonce" "$encrypted_message" "$message_ad"
 }
 
+# This function encrypts an AES-CTR message using the provided masking key and IV
 aesctr_encrypt() {
     local masking_key="$1"
     local masking_iv="$2"
@@ -51,6 +55,7 @@ aesctr_encrypt() {
     fi
 }
 
+# This function decrypts an AES-CTR encrypted message using the provided masking key and IV
 aesctr_decrypt() {
     local masking_key="$1"
     local masking_iv="$2"
@@ -67,12 +72,45 @@ aesctr_decrypt() {
     fi
 }
 
+# This function generates an ECDSA signature based on the provided message and private key
 ecdsa_sign() {
     local message="$1"
     local private_key="$2"
     python cryptography/ecdsa_sign.py "$message" "$private_key"
 }
 
+# This function generates an ID signature based on the provided challenge data, 
+# ephemeral public key, destination node ID, and private key.
+# Note: This function is NOT deterministic.
+id_sign() {
+    local challenge_data="$1"
+    local ephemeral_public_key="$2"
+    local dest_node_id="$3"
+    local private_key="$4"
+
+    # Compute SHA256 hash of the concatenated binary data
+    local id_signature_text="discovery v5 identity proof" 
+    local id_signature_input="${id_signature_text}$(printf "%s%s%s" "$challenge_data" "$ephemeral_public_key" "$dest_node_id" | hex_to_bin)"
+    local id_signature_hash=$(printf "%s" "$id_signature_input" | sha256 | bin_to_hex)
+
+    # Use the Python script to generate the signature
+    local signature=$(ecdsa_sign "$id_signature_hash" "$private_key")
+    if [ $? -ne 0 ] || [ -z "$signature" ]; then
+        printf "Error: Failed to generate signature\n" >&2
+        return 1
+    fi
+
+    # Ensure the signature is the correct length (64 bytes in hex)
+    if [ ${#signature} -ne 128 ]; then
+        printf "Error: Signature has incorrect length: expected 128, got %d\n" "${#signature}" >&2
+        return 1
+    fi
+
+    # Return the signature
+    printf "%s" "$signature"
+}
+
+# This function generates a SHA256 hash of the input
 sha256() {
     # if file descriptor 0 (stdin) is associated with a terminal
     if [ -t 0 ]; then

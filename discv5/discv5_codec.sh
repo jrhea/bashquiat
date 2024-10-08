@@ -624,10 +624,7 @@ encode_handshake_message() {
     [ ${#static_private_key} -ne 64 ] && { printf "Error: static_private_key should be 64 characters, got %d\n" "${#static_private_key}" >&2; return 1; }
 
     # Create id-signature
-    local id_signature_text="discovery v5 identity proof"
-    local id_signature_input="${id_signature_text}${challenge_data}${ephemeral_public_key}${dest_node_id}"
-    local id_signature_hash=$(printf "%s" "$id_signature_input" | sha256 | bin_to_hex)
-    local id_signature=$(id_sign "$id_signature_hash" "$static_private_key")
+    local id_signature=$(id_sign "$challenge_data" "$ephemeral_public_key" "$dest_node_id" "$static_private_key")
     local id_sign_result=$?
     if [ $id_sign_result -ne 0 ] || [ ${#id_signature} -ne 128 ]; then
         printf "Error: Failed to create id-signature, length: %d\n" "${#id_signature}" >&2
@@ -727,34 +724,6 @@ decode_handshake_message() {
         "$protocol_id" "$version" "$flag" "$nonce" "$authdata_size" \
         "$src_node_id" "$sig_size" "$eph_key_size" "$id_signature" \
         "$ephemeral_public_key" "$record"
-}
-
-
-id_sign() {
-    local message="$1"
-    local private_key="$2"
-
-    # Ensure inputs are the correct length
-    if [ ${#message} -ne 64 ] || [ ${#private_key} -ne 64 ]; then
-        printf "Error: Invalid input lengths for id_sign (message: %d, private_key: %d)\n" "${#message}" "${#private_key}" >&2
-        return 1
-    fi
-
-    # Use the Python script to generate the signature
-    local signature=$(ecdsa_sign "$message" "$private_key")
-    if [ $? -ne 0 ] || [ -z "$signature" ]; then
-        printf "Error: Failed to generate signature\n" >&2
-        return 1
-    fi
-
-    # Ensure the signature is the correct length (64 bytes in hex)
-    if [ ${#signature} -ne 128 ]; then
-        printf "Error: Signature has incorrect length: expected 128, got %d\n" "${#signature}" >&2
-        return 1
-    fi
-
-    # Return the signature
-    printf "%s" "$signature"
 }
 
 # Function to retrieve the message type from a packet
