@@ -1,8 +1,8 @@
 #!/bin/bash
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-source $DIR/../cryptography/utils.sh
-source $DIR/discv5_codec.sh
+source $DIR/../cryptography/cryptography.sh
+source $DIR/codec.sh
 
 # Create temporary files for our queues
 INCOMING_QUEUE=$(mktemp /tmp/discv5_incoming.XXXXXX)

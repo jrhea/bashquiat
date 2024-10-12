@@ -2,7 +2,7 @@
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 source $DIR/utils.sh
-source $DIR/../rlp/rlp_codec.sh
+source $DIR/../rlp/rlp.sh
 
 # Function to encode header
 encrypt_masked_header() {

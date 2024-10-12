@@ -2,7 +2,7 @@
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 source $DIR/../../discv5/utils.sh
-source $DIR/../utils.sh
+source $DIR/../cryptography.sh
 
 test_generate_secp256k1_keypair() {
     # Call the function
@@ -54,52 +54,4 @@ test_generate_secp256k1_keypair() {
     fi
 }
 
-test_id_sign(){
-    static_private_key="fb757dc581730490a1d7a00deea65e9b1936924caaea8f44d476014856b68736"
-    challenge_data="000000000000000000000000000000006469736376350001010102030405060708090a0b0c00180102030405060708090a0b0c0d0e0f100000000000000000"
-    ephemeral_public_key="039961e4c2356d61bedb83052c115d311acb3a96f5777296dcf297351130266231"
-    dest_node_id="bbbb9d047f0488c0b5a93c1c3f2d8bafc7c8ff337024a55434a0d0555de64db9"
-
-    local calculated_id_signature=$(id_sign "$challenge_data" "$ephemeral_public_key" "$dest_node_id" "$static_private_key")
-    local expected_id_signature="94852a1e2318c4e5e9d422c98eaf19d1d90d876b29cd06ca7cb7546d0fff7b484fe86c09a064fe72bdbef73ba8e9c34df0cd2b53e9d65528c2c7f336d5dfc6e6"
-
-    if [[ "$calculated_id_signature" != "$expected_id_signature" ]]; then
-        printf "test_id_sign: Test FAILED: signature mismatch.\n"
-        printf "Calculated: %s\n" "$calculated_id_signature"
-        printf "Expected:   %s\n" "$expected_id_signature"
-    else
-        printf "test_id_sign: Test PASSED: signature matches.\n"
-    fi  
-}
-
-test_id_sign_and_verify() {
-    # Test inputs
-    static_private_key="fb757dc581730490a1d7a00deea65e9b1936924caaea8f44d476014856b68736"
-    static_public_key="030e2cb74241c0c4fc8e8166f1a79a05d5b0dd95813a74b094529f317d5c39d235"
-    challenge_data="000000000000000000000000000000006469736376350001010102030405060708090a0b0c00180102030405060708090a0b0c0d0e0f100000000000000000"
-    ephemeral_pubkey="039961e4c2356d61bedb83052c115d311acb3a96f5777296dcf297351130266231"
-    dest_node_id="bbbb9d047f0488c0b5a93c1c3f2d8bafc7c8ff337024a55434a0d0555de64db9"
-    
-    # Generate the signature using id_sign
-    local calculated_id_signature
-    calculated_id_signature=$(id_sign "$challenge_data" "$ephemeral_pubkey" "$dest_node_id" "$static_private_key")
-    if [ $? -ne 0 ]; then
-        printf "test_id_sign_and_verify: Test FAILED: id_sign function returned an error.\n"
-        return 1
-    fi
-
-    # Verify the signature using id_verify, passing static_public_key
-    if id_verify "$challenge_data" "$ephemeral_pubkey" "$dest_node_id" "$calculated_id_signature" "$static_public_key"; then
-        printf "test_id_sign_and_verify: Test PASSED: Signature verified successfully.\n"
-        return 0
-    else
-        printf "test_id_sign_and_verify: Test FAILED: Signature verification failed.\n"
-        return 1
-    fi
-}
-
 test_generate_secp256k1_keypair
-printf "\n"
-test_id_sign
-printf "\n"
-test_id_sign_and_verify

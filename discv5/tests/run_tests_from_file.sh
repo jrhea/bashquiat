@@ -1,7 +1,7 @@
 #!/bin/bash
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-source $DIR/../discv5_codec.sh
+source $DIR/../codec.sh
 
 # Function to parse JSON
 parse_json() {
