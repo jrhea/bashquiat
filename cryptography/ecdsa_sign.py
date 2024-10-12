@@ -16,11 +16,6 @@ def ecdsa_sign(message_hash_hex, private_key_hex):
     
     # Get the signature as r || s (64 bytes)
     signature_bytes = signature.r.to_bytes(32, 'big') + signature.s.to_bytes(32, 'big')
-    
-    # Verify the signature immediately
-    public_key = private_key.public_key
-    is_valid = public_key.verify_msg_hash(message_hash_bytes, signature)
-    
     return signature_bytes.hex()
 
 if __name__ == '__main__':

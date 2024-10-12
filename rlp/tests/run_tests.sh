@@ -1,7 +1,7 @@
 #!/bin/bash
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-source $DIR/../rlp_codec.sh
+source $DIR/../rlp.sh
 
 # Colors for output
 GREEN='\033[0;32m'
